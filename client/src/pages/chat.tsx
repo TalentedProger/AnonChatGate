@@ -4,8 +4,6 @@ import { apiRequest } from '@/lib/queryClient';
 import { getInitData, initializeTelegramWebApp } from '@/lib/telegram';
 import { useAuth } from '@/lib/auth';
 import LoadingScreen from '@/components/loading-screen';
-import PendingScreen from '@/components/pending-screen';
-import RejectedScreen from '@/components/rejected-screen';
 import ChatInterface from '@/components/chat-interface';
 import DevModeButton from '@/components/dev-mode-button';
 import { useToast } from '@/hooks/use-toast';
@@ -77,7 +75,7 @@ export default function ChatPage() {
 
   // WebSocket connection
   useEffect(() => {
-    if (auth.user && auth.status === 'approved' && auth.token) {
+    if (auth.user && auth.token) {
       connectWebSocket();
     }
 
@@ -86,7 +84,7 @@ export default function ChatPage() {
         wsRef.current.close();
       }
     };
-  }, [auth.user, auth.status, auth.token]);
+  }, [auth.user, auth.token]);
 
   const connectWebSocket = async () => {
     if (!auth.user || !auth.isAuthenticated()) return;
@@ -158,7 +156,7 @@ export default function ChatPage() {
       
       // Reconnect after delay if still authenticated
       setTimeout(() => {
-        if (auth.user && auth.status === 'approved' && auth.token) {
+        if (auth.user && auth.token) {
           connectWebSocket();
         }
       }, 3000);
@@ -243,28 +241,13 @@ export default function ChatPage() {
     }
   };
 
-  // Show loading screen
+  // Show loading screen only during initial authentication
   if ((!devMode && authLoading) || auth.status === 'loading') {
     return <LoadingScreen onDevAuth={handleDevAuth} />;
   }
 
-  // Show pending screen
-  if (auth.status === 'pending') {
-    return <PendingScreen onRefreshStatus={handleRefreshStatus} onDevAuth={handleDevAuth} />;
-  }
-
-  // Show rejected screen
-  if (auth.status === 'rejected') {
-    return <RejectedScreen onDevAuth={handleDevAuth} />;
-  }
-
-  // Show expired token screen
-  if (auth.status === 'expired') {
-    return <LoadingScreen onDevAuth={handleDevAuth} />;
-  }
-
-  // Show chat interface for approved users
-  if (auth.status === 'approved' && auth.user) {
+  // Show chat interface for all authenticated users
+  if (auth.user && auth.token) {
     return (
       <ChatInterface
         user={auth.user}
@@ -276,12 +259,12 @@ export default function ChatPage() {
     );
   }
 
-  // Fallback error state
+  // Fallback authentication error state
   return (
     <div className="h-full flex items-center justify-center">
       <div className="text-center">
-        <h2 className="text-xl font-semibold mb-2">Ошибка загрузки</h2>
-        <p className="text-muted-foreground mb-4">Не удалось загрузить приложение</p>
+        <h2 className="text-xl font-semibold mb-2">Ошибка аутентификации</h2>
+        <p className="text-muted-foreground mb-4">Не удалось войти в приложение</p>
         <button 
           onClick={handleRefreshStatus}
           className="bg-primary text-primary-foreground px-4 py-2 rounded-lg hover:bg-primary/90"
