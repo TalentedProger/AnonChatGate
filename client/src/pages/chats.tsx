@@ -3,10 +3,10 @@ import { MessageSquare, ArrowRight } from 'lucide-react';
 
 export default function ChatsPage() {
   return (
-    <div className="h-full bg-black text-white">
+    <div className="h-full bg-black text-white overflow-y-auto">
       {/* Header */}
       <div className="bg-black border-b border-zinc-800 px-4 py-6">
-        <h1 className="text-xl font-semibold text-white">Чаты</h1>
+        <h1 className="text-xl font-semibold text-white">AguGram</h1>
       </div>
 
       {/* Chat List */}
@@ -22,9 +22,15 @@ export default function ChatsPage() {
                   <h3 className="font-medium text-white" data-testid="text-chat-name">
                     Анонимный чат
                   </h3>
-                  <p className="text-sm text-zinc-400" data-testid="text-chat-description">
-                    Общайтесь анонимно с другими участниками
-                  </p>
+                  <div className="space-y-1">
+                    <p className="text-xs text-zinc-500" data-testid="text-chat-participants">
+                      Участников: <span className="text-green-400 font-medium">24</span> • 
+                      Онлайн: <span className="text-blue-400 font-medium">8</span>
+                    </p>
+                    <p className="text-sm text-zinc-300 truncate" data-testid="text-last-message">
+                      Привет всем! Как дела с учёбой?
+                    </p>
+                  </div>
                 </div>
               </div>
               <ArrowRight className="w-5 h-5 text-zinc-400" />

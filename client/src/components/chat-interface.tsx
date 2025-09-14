@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Paperclip } from 'lucide-react';
+import { Send, Paperclip, ArrowLeft } from 'lucide-react';
 
 interface User {
   id: number;
@@ -97,6 +97,13 @@ export default function ChatInterface({
       {/* Chat Header */}
       <header className="bg-black border-b border-zinc-800 px-4 py-3 flex items-center justify-between">
         <div className="flex items-center">
+          <button 
+            onClick={() => window.history.back()}
+            className="p-2 mr-2 hover:bg-zinc-800 rounded-full transition-colors"
+            data-testid="button-back"
+          >
+            <ArrowLeft className="w-5 h-5 text-white" />
+          </button>
           <div className="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center mr-3">
             <span className="text-white text-sm font-semibold">#</span>
           </div>

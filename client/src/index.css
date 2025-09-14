@@ -103,8 +103,30 @@
     @apply border-border;
   }
 
-  body {
+  html, body {
     @apply font-sans antialiased bg-background text-foreground;
+    height: 100%;
+    overflow-x: hidden;
+    -webkit-overflow-scrolling: touch;
+  }
+  
+  /* Mobile scrolling fixes */
+  body {
+    position: relative;
+    width: 100%;
+    min-height: 100vh;
+  }
+  
+  /* Enable smooth scrolling on mobile */
+  * {
+    scroll-behavior: smooth;
+  }
+  
+  /* Fix mobile viewport */
+  @supports (-webkit-touch-callout: none) {
+    body {
+      min-height: -webkit-fill-available;
+    }
   }
 }
 
