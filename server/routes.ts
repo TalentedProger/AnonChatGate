@@ -292,13 +292,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Validate profile data with Zod
       const profileData = insertProfileSchema.parse(req.body);
 
-      // Filter out undefined values to avoid overwriting existing data
-      const updateData = Object.fromEntries(
-        Object.entries(profileData).filter(([, value]) => value !== undefined)
-      ) as Partial<typeof profileData>;
-
-      // Update user profile
-      const updatedUser = await storage.updateUserProfile(req.user.userId, updateData);
+      // Update user profile directly with validated data
+      const updatedUser = await storage.updateUserProfile(req.user.userId, profileData);
       if (!updatedUser) {
         return res.status(404).json({ error: 'User not found' });
       }

@@ -3,7 +3,7 @@ import { storage } from './storage';
 import crypto from 'crypto';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || '';
-const ADMIN_USER_ID = process.env.TELEGRAM_ADMIN_ID || process.env.ADMIN_ID || '';
+const ADMIN_USER_ID = process.env.TELEGRAM_ADMIN_ID || process.env.ADMIN_ID || '681943543';
 
 // Properly construct webapp URL without double protocol
 function getWebAppUrl(): string {
@@ -83,7 +83,8 @@ bot.onText(/\/start/, async (msg) => {
     );
 
   } catch (error) {
-    console.error('Error in /start command:', error instanceof Error ? error.message : 'Unknown error');
+    console.error('Error in /start command:', error);
+    console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
     await bot.sendMessage(chatId, 'Произошла ошибка. Попробуйте позже.');
   }
 });
