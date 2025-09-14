@@ -9,7 +9,7 @@ interface TokenPayload {
 
 interface AuthUser {
   id: number;
-  anonName: string;
+  anonName: string | null;
   status: string;
 }
 
@@ -56,7 +56,7 @@ export function generateRefreshToken(user: AuthUser): string {
   return jwt.sign(payload, secret, { expiresIn: '7d' });
 }
 
-export function verifyAuthToken(token: string): { userId: number; anonName: string; status: string } | null {
+export function verifyAuthToken(token: string): { userId: number; anonName: string | null; status: string } | null {
   try {
     const secret = getJwtSecret();
     const decoded = jwt.verify(token, secret) as TokenPayload;

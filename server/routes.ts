@@ -2,8 +2,8 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupWebSocket } from "./websocket";
-import { insertUserSchema } from "@shared/schema";
-import { generateAuthToken, generateRefreshToken, verifyRefreshToken } from "./auth";
+import { insertUserSchema, insertProfileSchema } from "@shared/schema";
+import { generateAuthToken, generateRefreshToken, verifyRefreshToken, verifyAuthToken } from "./auth";
 import crypto from 'crypto';
 import querystring from 'querystring';
 
@@ -38,13 +38,26 @@ function verifyInitData(initData: string, botToken: string): boolean {
   }
 }
 
-function generateAnonName(): string {
-  const prefixes = ['User', 'Anon', 'Guest', 'Member'];
-  const suffix = Math.floor(Math.random() * 9000) + 1000;
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-  return `${prefix}${suffix}`;
-}
+// Anonymous names are now auto-generated in storage.createUser as Student_{id}
 
+// Authentication middleware
+function requireAuth(req: any, res: any, next: any) {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ error: 'Authorization token required' });
+  }
+
+  const token = authHeader.substring(7);
+  const user = verifyAuthToken(token);
+  
+  if (!user) {
+    return res.status(401).json({ error: 'Invalid or expired token' });
+  }
+
+  // Add user info to request
+  req.user = user;
+  next();
+}
 
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
@@ -92,7 +105,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user = await storage.createUser({
           tgId: targetTgId,
           username: null,
-          anonName: generateAnonName(),
           status: targetTgId === BigInt(999999) ? 'approved' : 'pending',
         });
       }
@@ -171,7 +183,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user = await storage.createUser({
           tgId,
           username: userData.username || null,
-          anonName: generateAnonName(),
           status: 'pending',
         });
       }
@@ -242,6 +253,90 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Token refresh error:', error);
       res.status(500).json({ error: 'Token refresh failed' });
+    }
+  });
+
+  // Get user profile
+  app.get('/api/profile', requireAuth, async (req: any, res) => {
+    try {
+      const user = await storage.getUserById(req.user.userId);
+      if (!user) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      res.json({
+        profile: {
+          id: user.id,
+          displayName: user.displayName,
+          course: user.course,
+          direction: user.direction,
+          bio: user.bio,
+          avatarUrl: user.avatarUrl,
+          socialLinks: user.socialLinks || [],
+          photos: user.photos || [],
+          profileCompleted: user.profileCompleted === 'true',
+          anonName: user.anonName,
+          status: user.status
+        }
+      });
+
+    } catch (error) {
+      console.error('Get profile error:', error);
+      res.status(500).json({ error: 'Failed to get profile' });
+    }
+  });
+
+  // Update user profile
+  app.patch('/api/profile', requireAuth, async (req: any, res) => {
+    try {
+      // Validate profile data with Zod
+      const profileData = insertProfileSchema.parse(req.body);
+
+      // Filter out undefined values to avoid overwriting existing data
+      const updateData = Object.fromEntries(
+        Object.entries(profileData).filter(([, value]) => value !== undefined)
+      );
+
+      // Update user profile
+      const updatedUser = await storage.updateUserProfile(req.user.userId, updateData);
+      if (!updatedUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+
+      // Mark profile as completed if required fields are filled
+      let finalUser = updatedUser;
+      if (profileData.displayName && profileData.course && profileData.direction) {
+        finalUser = await storage.markProfileCompleted(req.user.userId) || updatedUser;
+      }
+
+      res.json({
+        success: true,
+        profile: {
+          id: finalUser.id,
+          displayName: finalUser.displayName,
+          course: finalUser.course,
+          direction: finalUser.direction,
+          bio: finalUser.bio,
+          avatarUrl: finalUser.avatarUrl,
+          socialLinks: finalUser.socialLinks || [],
+          photos: finalUser.photos || [],
+          profileCompleted: finalUser.profileCompleted === 'true',
+          anonName: finalUser.anonName,
+          status: finalUser.status
+        }
+      });
+
+    } catch (error) {
+      if (error instanceof Error && 'issues' in error) {
+        // Zod validation error
+        return res.status(400).json({ 
+          error: 'Validation failed', 
+          details: (error as any).issues 
+        });
+      }
+
+      console.error('Update profile error:', error);
+      res.status(500).json({ error: 'Failed to update profile' });
     }
   });
 
