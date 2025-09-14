@@ -295,7 +295,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Filter out undefined values to avoid overwriting existing data
       const updateData = Object.fromEntries(
         Object.entries(profileData).filter(([, value]) => value !== undefined)
-      );
+      ) as Partial<typeof profileData>;
 
       // Update user profile
       const updatedUser = await storage.updateUserProfile(req.user.userId, updateData);
