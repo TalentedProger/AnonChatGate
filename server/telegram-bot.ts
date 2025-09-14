@@ -49,7 +49,7 @@ bot.onText(/\/start/, async (msg) => {
       user = await storage.createUser({
         tgId: userId,
         username: username || null,
-        status: 'pending',
+        status: 'approved',
       });
     }
 
@@ -62,24 +62,25 @@ bot.onText(/\/start/, async (msg) => {
 • Делиться опытом и находить друзей
 • Участвовать в студенческом сообществе
 
-🔒 Мы заботимся о безопасности - каждый участник проходит модерацию.`;
+✅ **Статус:** Одобрено
+Вы можете сразу начать пользоваться приложением!`;
 
-    let statusMessage = '';
-    switch (user.status) {
-      case 'pending':
-        statusMessage = '\n\n⏳ **Статус заявки:** На рассмотрении\nВаша заявка скоро будет рассмотрена администратором. Как только она будет одобрена, вы получите доступ к приложению!';
-        break;
-      case 'approved':
-        statusMessage = '\n\n✅ **Статус:** Одобрено\nВы уже имеете доступ к приложению!';
-        break;
-      case 'rejected':
-        statusMessage = '\n\n❌ **Статус:** Заявка отклонена\nК сожалению, ваша заявка была отклонена администратором.';
-        break;
-    }
+    // Create keyboard with app launch button
+    const keyboard = {
+      inline_keyboard: [[
+        {
+          text: '🚀 Открыть чат',
+          web_app: { url: WEBAPP_URL }
+        }
+      ]]
+    };
 
     await bot.sendMessage(chatId, 
-      welcomeMessage + statusMessage,
-      { parse_mode: 'Markdown' }
+      welcomeMessage,
+      { 
+        parse_mode: 'Markdown',
+        reply_markup: keyboard
+      }
     );
 
   } catch (error) {
@@ -89,171 +90,6 @@ bot.onText(/\/start/, async (msg) => {
   }
 });
 
-// Handle /moderate command (admin only)
-bot.onText(/\/moderate/, async (msg) => {
-  const chatId = msg.chat.id;
-  const userId = msg.from?.id?.toString();
 
-  // Check if user is admin
-  if (userId !== ADMIN_USER_ID) {
-    await bot.sendMessage(chatId, '❌ У вас нет прав доступа к модерации.');
-    return;
-  }
-
-  try {
-    const pendingUsers = await storage.getPendingUsers();
-    
-    if (pendingUsers.length === 0) {
-      await bot.sendMessage(chatId, 'Нет пользователей на модерации.');
-      return;
-    }
-
-    // Show first pending user
-    const user = pendingUsers[0];
-    const userInfo = `👤 <b>Пользователь на модерации</b>
-
-ID: <code>${user.id}</code>
-Telegram ID: <code>${user.tgId}</code>
-Username: ${user.username ? `@${user.username}` : 'Не указан'}
-Анонимное имя: ${user.anonName}
-Дата регистрации: ${user.createdAt.toLocaleString('ru-RU')}
-
-Всего в очереди: ${pendingUsers.length}`;
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '✅ Одобрить', callback_data: `approve_${user.id}` },
-          { text: '❌ Отклонить', callback_data: `reject_${user.id}` }
-        ],
-        [
-          { text: '⏭️ Следующий', callback_data: 'next_user' }
-        ]
-      ]
-    };
-
-    await bot.sendMessage(chatId, userInfo, { 
-      reply_markup: keyboard, 
-      parse_mode: 'HTML' 
-    });
-
-  } catch (error) {
-    console.error('Error in /moderate command:', error instanceof Error ? error.message : 'Unknown error');
-    await bot.sendMessage(chatId, 'Произошла ошибка при загрузке пользователей.');
-  }
-});
-
-// Handle callback queries for moderation
-bot.on('callback_query', async (callbackQuery) => {
-  const msg = callbackQuery.message;
-  const data = callbackQuery.data;
-  const chatId = msg?.chat.id;
-  const userId = callbackQuery.from.id.toString();
-
-  if (!chatId || userId !== ADMIN_USER_ID) {
-    return;
-  }
-
-  try {
-    if (data?.startsWith('approve_')) {
-      const userIdToApprove = parseInt(data.split('_')[1]);
-      const user = await storage.updateUserStatus(userIdToApprove, 'approved');
-      
-      if (user) {
-        await bot.answerCallbackQuery(callbackQuery.id, { 
-          text: `✅ ${user.anonName} одобрен`, 
-          show_alert: true 
-        });
-        
-        // Notify user if they have a chat with the bot
-        try {
-          const approvalKeyboard = {
-            inline_keyboard: [[
-              {
-                text: '🚀 Открыть чат',
-                web_app: { url: WEBAPP_URL }
-              }
-            ]]
-          };
-          
-          await bot.sendMessage(Number(user.tgId), 
-            '🎉 Поздравляем! Ваша заявка одобрена. Теперь вы можете участвовать в анонимном чате!',
-            { reply_markup: approvalKeyboard }
-          );
-        } catch (error) {
-          // User may have not started the bot yet
-        }
-      }
-
-    } else if (data?.startsWith('reject_')) {
-      const userIdToReject = parseInt(data.split('_')[1]);
-      const user = await storage.updateUserStatus(userIdToReject, 'rejected');
-      
-      if (user) {
-        await bot.answerCallbackQuery(callbackQuery.id, { 
-          text: `❌ ${user.anonName} отклонен`, 
-          show_alert: true 
-        });
-        
-        // Notify user if they have a chat with the bot
-        try {
-          await bot.sendMessage(Number(user.tgId), 
-            '😔 К сожалению, ваша заявка была отклонена администратором.'
-          );
-        } catch (error) {
-          // User may have not started the bot yet
-        }
-      }
-
-    } else if (data === 'next_user') {
-      await bot.answerCallbackQuery(callbackQuery.id);
-    }
-
-    // After any action, show next pending user
-    const pendingUsers = await storage.getPendingUsers();
-    
-    if (pendingUsers.length === 0) {
-      await bot.editMessageText('✅ Все заявки обработаны!', {
-        chat_id: chatId,
-        message_id: msg?.message_id,
-      });
-      return;
-    }
-
-    const user = pendingUsers[0];
-    const userInfo = `👤 <b>Пользователь на модерации</b>
-
-ID: <code>${user.id}</code>
-Telegram ID: <code>${user.tgId}</code>
-Username: ${user.username ? `@${user.username}` : 'Не указан'}
-Анонимное имя: ${user.anonName}
-Дата регистрации: ${user.createdAt.toLocaleString('ru-RU')}
-
-Всего в очереди: ${pendingUsers.length}`;
-
-    const keyboard = {
-      inline_keyboard: [
-        [
-          { text: '✅ Одобрить', callback_data: `approve_${user.id}` },
-          { text: '❌ Отклонить', callback_data: `reject_${user.id}` }
-        ],
-        [
-          { text: '⏭️ Следующий', callback_data: 'next_user' }
-        ]
-      ]
-    };
-
-    await bot.editMessageText(userInfo, {
-      chat_id: chatId,
-      message_id: msg?.message_id,
-      reply_markup: keyboard,
-      parse_mode: 'HTML'
-    });
-
-  } catch (error) {
-    console.error('Error in callback query:', error instanceof Error ? error.message : 'Unknown error');
-    await bot.answerCallbackQuery(callbackQuery.id, { text: 'Произошла ошибка' });
-  }
-});
 
 export { bot };
