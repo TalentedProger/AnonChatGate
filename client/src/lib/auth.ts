@@ -271,7 +271,7 @@ class AuthManager {
 
   // Check if user is authenticated
   isAuthenticated(): boolean {
-    return !!(this.authState.token && this.authState.user && this.authState.status === 'approved');
+    return !!(this.authState.token && this.authState.user);
   }
 
   // Cleanup (call when component unmounts or app closes)

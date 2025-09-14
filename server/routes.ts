@@ -105,7 +105,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user = await storage.createUser({
           tgId: targetTgId,
           username: null,
-          status: targetTgId === BigInt(999999) ? 'approved' : 'pending',
+          status: 'approved',
         });
       }
 
@@ -183,7 +183,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user = await storage.createUser({
           tgId,
           username: userData.username || null,
-          status: 'pending',
+          status: 'approved',
         });
       }
 

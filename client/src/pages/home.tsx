@@ -36,7 +36,7 @@ export default function HomePage() {
               <ul className="space-y-1 text-sm text-muted-foreground">
                 <li>• Анонимные чаты для студентов</li>
                 <li>• Безопасное общение без раскрытия личности</li>
-                <li>• Модерация контента</li>
+                <li>• Мгновенный доступ - без ожидания одобрения</li>
                 <li>• Профили с образовательной информацией</li>
               </ul>
             </div>

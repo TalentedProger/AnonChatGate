@@ -103,14 +103,6 @@ export function setupWebSocket(server: Server) {
         return;
       }
 
-      if (user.status !== 'approved') {
-        ws.send(JSON.stringify({
-          type: 'auth_error',
-          message: 'User not approved for chat'
-        }));
-        ws.close(1008, 'Not approved');
-        return;
-      }
 
       // Authentication successful
       ws.userId = user.id;
@@ -155,7 +147,7 @@ export function setupWebSocket(server: Server) {
 
   async function handleSendMessage(ws: AuthenticatedWebSocket, message: any) {
     try {
-      if (!ws.userId || ws.userStatus !== 'approved') {
+      if (!ws.userId) {
         ws.send(JSON.stringify({
           type: 'error',
           message: 'Not authenticated or not approved'
@@ -227,7 +219,7 @@ export function setupWebSocket(server: Server) {
       wss.clients.forEach((client: AuthenticatedWebSocket) => {
         if (client.readyState === WebSocket.OPEN && 
             client.userId && 
-            client.userStatus === 'approved') {
+            client.userId) {
           client.send(broadcastData);
         }
       });
