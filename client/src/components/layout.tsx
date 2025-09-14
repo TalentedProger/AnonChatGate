@@ -1,10 +1,14 @@
 import BottomNavigation from './bottom-navigation';
+import { useLocation } from 'wouter';
 
 interface LayoutProps {
   children: React.ReactNode;
 }
 
 export default function Layout({ children }: LayoutProps) {
+  const [location] = useLocation();
+  const isInChat = location.startsWith('/chat');
+
   return (
     <div className="h-screen bg-background font-sans flex flex-col">
       {/* Main Content */}
@@ -12,8 +16,8 @@ export default function Layout({ children }: LayoutProps) {
         {children}
       </div>
       
-      {/* Bottom Navigation */}
-      <BottomNavigation />
+      {/* Bottom Navigation - hidden in chat */}
+      {!isInChat && <BottomNavigation />}
     </div>
   );
 }

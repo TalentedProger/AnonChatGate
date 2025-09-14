@@ -1,379 +1,240 @@
-import { useState, useEffect } from 'react';
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { motion, AnimatePresence } from "framer-motion";
+import { Heart, Star, Send, Instagram, Settings, Plus, EyeOff } from "lucide-react";
+import { useState } from "react";
 import { useAuth } from '@/lib/auth';
-import { useQuery, useMutation } from '@tanstack/react-query';
-import { apiRequest, queryClient } from '@/lib/queryClient';
-import { useToast } from '@/hooks/use-toast';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Label } from '@/components/ui/label';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Separator } from '@/components/ui/separator';
-import { User, Book, Globe, Image } from 'lucide-react';
-
-interface UserProfile {
-  id: number;
-  telegramId: string;
-  anonName: string;
-  status: string;
-  displayName?: string;
-  course?: string;
-  direction?: string;
-  bio?: string;
-  avatarUrl?: string;
-  socialLinks?: string[];
-  photos?: string[];
-}
 
 export default function ProfilePage() {
   const auth = useAuth();
-  const { toast } = useToast();
-  const [isEditing, setIsEditing] = useState(false);
-  const [formData, setFormData] = useState({
-    displayName: '',
-    course: '',
-    direction: '',
-    bio: '',
-    avatarUrl: '',
-    socialLinks: '',
-    photos: ''
-  });
-
-  // Fetch user profile
-  const { data: profile, isLoading } = useQuery({
-    queryKey: ['/api/profile'],
-    queryFn: async () => {
-      const response = await apiRequest('GET', '/api/profile');
-      return await response.json() as UserProfile;
-    },
-    enabled: !!auth.user && !!auth.token
-  });
-
-  // Update profile mutation
-  const updateProfileMutation = useMutation({
-    mutationFn: async (data: any) => {
-      const response = await apiRequest('PATCH', '/api/profile', {
-        displayName: data.displayName,
-        course: data.course,
-        direction: data.direction,
-        bio: data.bio || undefined,
-        avatarUrl: data.avatarUrl || undefined,
-        socialLinks: data.socialLinks ? data.socialLinks.split(',').map((s: string) => s.trim()).filter(Boolean) : undefined,
-        photos: data.photos ? data.photos.split(',').map((s: string) => s.trim()).filter(Boolean) : undefined
-      });
-      return await response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['/api/profile'] });
-      setIsEditing(false);
-      toast({
-        title: "Профиль обновлен",
-        description: "Ваши данные успешно сохранены"
-      });
-    },
-    onError: (error: any) => {
-      console.error('Profile update error:', error);
-      toast({
-        variant: "destructive",
-        title: "Ошибка",
-        description: "Не удалось обновить профиль"
-      });
-    }
-  });
-
-  // Initialize form when profile loads
-  useEffect(() => {
-    if (profile) {
-      setFormData({
-        displayName: profile.displayName || '',
-        course: profile.course || '',
-        direction: profile.direction || '',
-        bio: profile.bio || '',
-        avatarUrl: profile.avatarUrl || '',
-        socialLinks: profile.socialLinks?.join(', ') || '',
-        photos: profile.photos?.join(', ') || ''
-      });
-    }
-  }, [profile]);
-
-  const handleEdit = () => {
-    if (profile) {
-      setFormData({
-        displayName: profile.displayName || '',
-        course: profile.course || '',
-        direction: profile.direction || '',
-        bio: profile.bio || '',
-        avatarUrl: profile.avatarUrl || '',
-        socialLinks: profile.socialLinks?.join(', ') || '',
-        photos: profile.photos?.join(', ') || ''
-      });
-    }
-    setIsEditing(true);
-  };
-
-  const handleSave = () => {
-    if (!formData.displayName.trim() || !formData.course.trim() || !formData.direction.trim()) {
-      toast({
-        variant: "destructive",
-        title: "Ошибка валидации",
-        description: "Имя, курс и направление обязательны для заполнения"
-      });
-      return;
-    }
-    updateProfileMutation.mutate(formData);
-  };
-
-  const handleCancel = () => {
-    setIsEditing(false);
-    if (profile) {
-      setFormData({
-        displayName: profile.displayName || '',
-        course: profile.course || '',
-        direction: profile.direction || '',
-        bio: profile.bio || '',
-        avatarUrl: profile.avatarUrl || '',
-        socialLinks: profile.socialLinks?.join(', ') || '',
-        photos: profile.photos?.join(', ') || ''
-      });
-    }
-  };
-
-  if (isLoading) {
-    return (
-      <div className="h-full flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-2"></div>
-          <p className="text-muted-foreground">Загрузка профиля...</p>
-        </div>
-      </div>
-    );
-  }
+  const [activeProfile, setActiveProfile] = useState("main");
+  const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="h-full flex flex-col bg-background p-4 space-y-4 overflow-y-auto pb-20">
-      <div className="glass-effect neon-border rounded-lg">
-        <div className="p-6">
-          <div className="flex items-center gap-2 mb-6">
-            <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center neon-glow">
-              <User size={20} className="text-primary-foreground" />
-            </div>
-            <h1 className="text-xl font-semibold text-primary neon-text">Профиль пользователя</h1>
-          </div>
-          {/* Anonymous Identity */}
-          <div className="glass-effect border border-primary/30 rounded-lg p-4 mb-6">
-            <h3 className="font-semibold text-accent mb-2">Анонимное имя в чатах</h3>
-            <p className="text-lg font-mono text-primary neon-text">{auth.user?.anonName}</p>
-            <p className="text-xs text-accent/60">ID: {auth.user?.id}</p>
-          </div>
+    <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white p-6 flex flex-col items-center">
+      {/* Compact Switcher */}
+      <div className="fixed top-6 left-6 flex items-center bg-white/10 backdrop-blur-md rounded-full p-1 z-50">
+        {[
+          { key: "main", icon: "👤" },
+          { key: "anon", icon: "🎭" },
+        ].map((profile) => (
+          <motion.div
+            key={profile.key}
+            whileTap={{ scale: 0.9 }}
+            onClick={() => setActiveProfile(profile.key)}
+            className={`w-10 h-10 rounded-full flex items-center justify-center cursor-pointer transition-colors ${
+              activeProfile === profile.key ? "bg-white text-black" : "bg-transparent text-white"
+            }`}
+            data-testid={`button-profile-${profile.key}`}
+          >
+            <span className="text-lg">{profile.icon}</span>
+          </motion.div>
+        ))}
+      </div>
 
-          <div className="h-px bg-gradient-to-r from-transparent via-primary to-transparent mb-6"></div>
-
-          {/* Profile Form */}
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-semibold text-accent neon-text">Личная информация</h3>
-              {!isEditing && (
-                <button
-                  onClick={handleEdit}
-                  className="glass-effect border border-primary/50 text-primary px-4 py-2 rounded-lg hover:neon-glow transition-all duration-300"
-                  data-testid="button-edit-profile"
-                >
-                  Редактировать
-                </button>
-              )}
-            </div>
-
-            {/* Display Name */}
-            <div className="space-y-2">
-              <label htmlFor="displayName" className="text-accent/80 text-sm font-medium">Имя *</label>
-              {isEditing ? (
-                <input
-                  id="displayName"
-                  value={formData.displayName}
-                  onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
-                  placeholder="Ваше имя"
-                  className="w-full glass-effect border border-primary/30 rounded-lg px-4 py-2 text-foreground placeholder-accent/60 focus:outline-none focus:border-primary focus:neon-glow transition-all duration-300"
-                  data-testid="input-display-name"
-                />
-              ) : (
-                <p className="text-sm p-3 glass-effect border border-primary/20 rounded-lg">
-                  {profile?.displayName || 'Не указано'}
-                </p>
-              )}
-            </div>
-
-            {/* Course */}
-            <div className="space-y-2">
-              <Label htmlFor="course">Курс *</Label>
-              {isEditing ? (
-                <Input
-                  id="course"
-                  value={formData.course}
-                  onChange={(e) => setFormData(prev => ({ ...prev, course: e.target.value }))}
-                  placeholder="Например: 2 курс"
-                  data-testid="input-course"
-                />
-              ) : (
-                <p className="text-sm p-2 bg-muted/30 rounded flex items-center gap-2">
-                  <Book size={16} />
-                  {profile?.course || 'Не указано'}
-                </p>
-              )}
-            </div>
-
-            {/* Direction */}
-            <div className="space-y-2">
-              <Label htmlFor="direction">Направление *</Label>
-              {isEditing ? (
-                <Input
-                  id="direction"
-                  value={formData.direction}
-                  onChange={(e) => setFormData(prev => ({ ...prev, direction: e.target.value }))}
-                  placeholder="Например: Программная инженерия"
-                  data-testid="input-direction"
-                />
-              ) : (
-                <p className="text-sm p-2 bg-muted/30 rounded flex items-center gap-2">
-                  <Globe size={16} />
-                  {profile?.direction || 'Не указано'}
-                </p>
-              )}
-            </div>
-
-            {/* Bio */}
-            <div className="space-y-2">
-              <Label htmlFor="bio">О себе</Label>
-              {isEditing ? (
-                <Textarea
-                  id="bio"
-                  value={formData.bio}
-                  onChange={(e) => setFormData(prev => ({ ...prev, bio: e.target.value }))}
-                  placeholder="Расскажите о себе..."
-                  rows={3}
-                  data-testid="input-bio"
-                />
-              ) : (
-                <p className="text-sm p-2 bg-muted/30 rounded min-h-[60px]">
-                  {profile?.bio || 'Не указано'}
-                </p>
-              )}
-            </div>
-
-            {/* Avatar URL */}
-            <div className="space-y-2">
-              <Label htmlFor="avatarUrl">Аватар (URL)</Label>
-              {isEditing ? (
-                <Input
-                  id="avatarUrl"
-                  value={formData.avatarUrl}
-                  onChange={(e) => setFormData(prev => ({ ...prev, avatarUrl: e.target.value }))}
-                  placeholder="https://example.com/avatar.jpg"
-                  data-testid="input-avatar-url"
-                />
-              ) : (
-                <div className="flex items-center gap-3 p-2 bg-muted/30 rounded">
-                  {profile?.avatarUrl ? (
-                    <>
-                      <img
-                        src={profile.avatarUrl}
-                        alt="Avatar"
-                        className="w-8 h-8 rounded-full object-cover"
-                      />
-                      <span className="text-sm truncate">{profile.avatarUrl}</span>
-                    </>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">Не указано</span>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Social Links */}
-            <div className="space-y-2">
-              <Label htmlFor="socialLinks">Социальные ссылки</Label>
-              {isEditing ? (
-                <Input
-                  id="socialLinks"
-                  value={formData.socialLinks}
-                  onChange={(e) => setFormData(prev => ({ ...prev, socialLinks: e.target.value }))}
-                  placeholder="https://vk.com/id, https://t.me/username (через запятую)"
-                  data-testid="input-social-links"
-                />
-              ) : (
-                <div className="space-y-1">
-                  {profile?.socialLinks && profile.socialLinks.length > 0 ? (
-                    profile.socialLinks.map((link, index) => (
-                      <p key={index} className="text-sm p-1 bg-muted/30 rounded truncate">
-                        {link}
-                      </p>
-                    ))
-                  ) : (
-                    <p className="text-sm p-2 bg-muted/30 rounded text-muted-foreground">
-                      Не указано
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Photos */}
-            <div className="space-y-2">
-              <Label htmlFor="photos">Фотографии (URL)</Label>
-              {isEditing ? (
-                <Input
-                  id="photos"
-                  value={formData.photos}
-                  onChange={(e) => setFormData(prev => ({ ...prev, photos: e.target.value }))}
-                  placeholder="https://example.com/photo1.jpg, https://example.com/photo2.jpg (через запятую)"
-                  data-testid="input-photos"
-                />
-              ) : (
-                <div className="space-y-2">
-                  {profile?.photos && profile.photos.length > 0 ? (
-                    <div className="grid grid-cols-3 gap-2">
-                      {profile.photos.map((photo, index) => (
-                        <img
-                          key={index}
-                          src={photo}
-                          alt={`Photo ${index + 1}`}
-                          className="w-full h-20 object-cover rounded border"
-                        />
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-sm p-2 bg-muted/30 rounded text-muted-foreground flex items-center gap-2">
-                      <Image size={16} />
-                      Не указано
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Action Buttons */}
-            {isEditing && (
-              <div className="flex gap-3 pt-6">
-                <button
-                  onClick={handleSave}
-                  disabled={updateProfileMutation.isPending}
-                  className="bg-gradient-to-r from-primary to-accent text-primary-foreground px-6 py-2 rounded-lg hover:neon-glow transition-all duration-300 disabled:opacity-50"
-                  data-testid="button-save-profile"
-                >
-                  {updateProfileMutation.isPending ? 'Сохранение...' : 'Сохранить'}
-                </button>
-                <button
-                  onClick={handleCancel}
-                  disabled={updateProfileMutation.isPending}
-                  className="glass-effect border border-accent/50 text-accent px-6 py-2 rounded-lg hover:border-accent hover:neon-glow transition-all duration-300 disabled:opacity-50"
-                  data-testid="button-cancel-edit"
-                >
-                  Отмена
-                </button>
-              </div>
+      {/* Menu button */}
+      <div className="fixed top-6 right-6 z-50">
+        <div className="relative">
+          <button
+            onClick={() => setMenuOpen(!menuOpen)}
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-black hover:bg-violet-600 transition-colors"
+            data-testid="button-menu"
+          >
+            <Settings className="text-white" />
+          </button>
+          <AnimatePresence>
+            {menuOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -10 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -10 }}
+                transition={{ duration: 0.2 }}
+                className="absolute right-0 mt-2 w-48 bg-black border border-gray-700 rounded-xl shadow-lg overflow-hidden"
+              >
+                <ul className="flex flex-col text-left text-sm">
+                  <li className="px-4 py-2 hover:bg-gray-800 cursor-pointer" data-testid="menu-edit-profile">Редактировать профиль</li>
+                  <li className="px-4 py-2 hover:bg-gray-800 cursor-pointer" data-testid="menu-change-photo">Изменить фото</li>
+                  <li className="px-4 py-2 hover:bg-gray-800 cursor-pointer" data-testid="menu-help">Помощь</li>
+                  <li className="px-4 py-2 hover:bg-gray-800 cursor-pointer" data-testid="menu-settings">Настройки</li>
+                </ul>
+              </motion.div>
             )}
-          </div>
+          </AnimatePresence>
         </div>
       </div>
+
+      {/* Animated profile switch */}
+      <div className="w-full max-w-3xl mt-20">
+        <AnimatePresence mode="wait">
+          {activeProfile === "main" ? (
+            <motion.div
+              key="main"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center space-y-6"
+            >
+              <div className="relative w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
+                <span className="text-3xl font-bold text-white">1</span>
+                <div className="absolute bottom-2 right-2 w-4 h-4 rounded-full bg-green-500 border-2 border-black"></div>
+              </div>
+              <h1 className="text-2xl font-bold text-white" data-testid="text-profile-name">CyberStudent</h1>
+              <p className="text-sm text-indigo-300" data-testid="text-profile-course">3 курс • Прикладная информатика</p>
+
+              {/* Metrics */}
+              <div className="grid grid-cols-2 gap-4 w-full">
+                <MetricCard
+                  icon={<Heart className="text-red-500 fill-red-500" />}
+                  value="128"
+                  label="Знакомства"
+                  borderColor="border-red-500 shadow-[0_0_10px_#ff000080]"
+                />
+                <MetricCard
+                  icon={<Star className="text-yellow-400 fill-yellow-400" />}
+                  value="542"
+                  label="Популярность"
+                  borderColor="border-yellow-400 shadow-[0_0_10px_#ffff0080]"
+                />
+              </div>
+
+              {/* About */}
+              <Section title="О себе">
+                <p className="text-gray-300" data-testid="text-profile-bio">
+                  Люблю создавать интерфейсы будущего. Код для меня — это искусство, а дизайн — способ общения. Люблю создавать интерфейсы будущего. Код для меня — это искусство, а дизайн — способ общения.
+                </p>
+              </Section>
+
+              {/* Links */}
+              <Section title="Ссылки">
+                <div className="flex gap-3 overflow-x-auto pb-2">
+                  <SocialButton icon={<Send className="w-6 h-6 text-cyan-400" />} label="Telegram" />
+                  <SocialButton icon={<div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">VK</div>} label="Vkontakte" />
+                  <SocialButton icon={<Instagram className="w-6 h-6 text-violet-400" />} label="Instagram" />
+                </div>
+              </Section>
+
+              {/* Album */}
+              <Section title="Фотоальбом">
+                <div className="grid grid-cols-3 gap-3">
+                  {[...Array(3)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      className="rounded-xl overflow-hidden border border-white/30 flex items-center justify-center bg-white/10 aspect-[3/4]"
+                      data-testid={`photo-slot-${i}`}
+                    >
+                      <Plus className="w-6 h-6 text-white/60" />
+                    </motion.div>
+                  ))}
+                </div>
+              </Section>
+            </motion.div>
+          ) : (
+            <motion.div
+              key="anon"
+              initial={{ opacity: 0, x: 50 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: -50 }}
+              transition={{ duration: 0.3 }}
+              className="flex flex-col items-center space-y-6"
+            >
+              <div className="relative w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
+                <span className="text-3xl font-bold text-white">1</span>
+                <div className="absolute bottom-2 right-2 w-4 h-4 rounded-full bg-green-500 border-2 border-black"></div>
+              </div>
+              <h2 className="text-2xl font-bold" data-testid="text-anon-name">{auth.user?.anonName || 'Student_1'}</h2>
+
+              {/* Metrics */}
+              <div className="grid grid-cols-2 gap-4 w-full">
+                <MetricCard
+                  icon={<Heart className="text-red-500 fill-red-500" />}
+                  value="?"
+                  label="Знакомства"
+                  borderColor="border-red-500 shadow-[0_0_10px_#ff000080]"
+                />
+                <MetricCard
+                  icon={<Star className="text-yellow-400 fill-yellow-400" />}
+                  value="?"
+                  label="Популярность"
+                  borderColor="border-yellow-400 shadow-[0_0_10px_#ffff0080]"
+                />
+              </div>
+
+              {/* About blurred */}
+              <Section title="О себе" locked>
+                <p className="text-gray-300 blur-sm select-none">
+                  Люблю создавать интерфейсы будущего. Код для меня — это искусство, а дизайн — способ общения. Люблю создавать интерфейсы будущего. Код для меня — это искусство, а дизайн — способ общения.
+                </p>
+              </Section>
+
+              {/* Links blurred */}
+              <Section title="Ссылки" locked>
+                <div className="flex gap-3 overflow-x-auto pb-2 opacity-50 blur-[1px]">
+                  <SocialButton icon={<Send className="w-6 h-6 text-cyan-400" />} label="Telegram" />
+                  <SocialButton icon={<div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">VK</div>} label="Vkontakte" />
+                  <SocialButton icon={<Instagram className="w-6 h-6 text-violet-400" />} label="Instagram" />
+                </div>
+              </Section>
+
+              {/* Album blurred */}
+              <Section title="Фотоальбом" locked>
+                <div className="grid grid-cols-3 gap-3">
+                  {[...Array(3)].map((_, i) => (
+                    <motion.div
+                      key={i}
+                      className="rounded-xl overflow-hidden border border-white/30 flex items-center justify-center bg-white/10 aspect-[3/4]"
+                    >
+                      <EyeOff className="w-6 h-6 text-white/60" />
+                    </motion.div>
+                  ))}
+                </div>
+              </Section>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
+  );
+}
+
+function MetricCard({ icon, value, label, borderColor }: { icon: React.ReactNode, value: string, label: string, borderColor: string }) {
+  return (
+    <div>
+      <Card className={`rounded-2xl bg-transparent border-2 ${borderColor} overflow-hidden`}>
+        <CardContent className="flex flex-col items-center py-2 text-white">
+          <div className="mb-1">{icon}</div>
+          <p className="text-xl font-bold" data-testid={`metric-${label.toLowerCase()}`}>{value}</p>
+          <span className="text-xs">{label}</span>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+function Section({ title, children, locked }: { title: string, children: React.ReactNode, locked?: boolean }) {
+  return (
+    <div className="space-y-2 mt-2 bg-black/20 rounded-xl p-3 w-full shadow-md shadow-white/5">
+      <h2 className="font-semibold text-lg flex items-center justify-between">
+        <span className="flex items-center gap-2">
+          <span className="text-white">•</span>
+          {title}
+        </span>
+        {locked && <span className="text-white text-sm">🔒</span>}
+      </h2>
+      {children}
+    </div>
+  );
+}
+
+function SocialButton({ icon, label }: { icon: React.ReactNode, label: string }) {
+  return (
+    <motion.div
+      whileHover={{ boxShadow: "0 0 15px rgba(177, 0, 255, 0.6)" }}
+      className="flex flex-col items-center justify-center w-24 h-24 bg-black/40 rounded-xl transition-all"
+      data-testid={`social-${label.toLowerCase()}`}
+    >
+      <div className="mb-2">{icon}</div>
+      <span className="text-sm">{label}</span>
+    </motion.div>
   );
 }
