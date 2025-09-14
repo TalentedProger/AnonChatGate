@@ -1,4 +1,4 @@
-import { users, messages, rooms, type User, type InsertUser, type Message, type InsertMessage, type Room, type InsertRoom } from "@shared/schema";
+import { users, messages, rooms, type User, type InsertUser, type InsertProfile, type Message, type InsertMessage, type Room, type InsertRoom } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc } from "drizzle-orm";
 
@@ -9,6 +9,8 @@ export interface IStorage {
   createUser(user: InsertUser): Promise<User>;
   updateUserStatus(id: number, status: "pending" | "approved" | "rejected"): Promise<User | undefined>;
   getPendingUsers(): Promise<User[]>;
+  updateUserProfile(id: number, profile: InsertProfile): Promise<User | undefined>;
+  markProfileCompleted(id: number): Promise<User | undefined>;
 
   // Message operations
   getMessagesByRoomId(roomId: number, limit?: number): Promise<(Message & { user: User | null })[]>;
@@ -32,11 +34,20 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createUser(insertUser: InsertUser): Promise<User> {
+    // Two-step process: insert user first, then update with auto-generated anonName
     const [user] = await db
       .insert(users)
       .values(insertUser)
       .returning();
-    return user;
+    
+    // Update with generated anonymous name based on user ID
+    const [updatedUser] = await db
+      .update(users)
+      .set({ anonName: `Student_${user.id}` })
+      .where(eq(users.id, user.id))
+      .returning();
+    
+    return updatedUser;
   }
 
   async updateUserStatus(id: number, status: "pending" | "approved" | "rejected"): Promise<User | undefined> {
@@ -90,6 +101,24 @@ export class DatabaseStorage implements IStorage {
       .values(insertRoom)
       .returning();
     return room;
+  }
+
+  async updateUserProfile(id: number, profile: InsertProfile): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set(profile)
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
+  }
+
+  async markProfileCompleted(id: number): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set({ profileCompleted: "true" })
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
   }
 
   async getOrCreateGlobalRoom(): Promise<Room> {

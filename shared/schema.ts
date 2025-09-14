@@ -8,8 +8,17 @@ export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   tgId: bigint("tg_id", { mode: "bigint" }).unique(),
   username: text("username"),
-  anonName: text("anon_name").notNull(),
+  anonName: text("anon_name"),
   status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
+  // Profile fields
+  displayName: text("display_name"),
+  course: text("course"),
+  direction: text("direction"),
+  bio: text("bio"),
+  avatarUrl: text("avatar_url"),
+  socialLinks: text("social_links").array(),
+  photos: text("photos").array(),
+  profileCompleted: text("profile_completed", { enum: ["true", "false"] }).default("false"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
@@ -50,6 +59,25 @@ export const messagesRelations = relations(messages, ({ one }) => ({
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
+  anonName: true, // Will be auto-generated based on user ID
+});
+
+export const insertProfileSchema = createInsertSchema(users).pick({
+  displayName: true,
+  course: true, 
+  direction: true,
+  bio: true,
+  avatarUrl: true,
+  socialLinks: true,
+  photos: true,
+}).extend({
+  displayName: z.string().min(1, "Имя пользователя обязательно"),
+  course: z.string().min(1, "Курс обязателен"),
+  direction: z.string().min(1, "Направление обязательно"),
+  bio: z.string().optional(),
+  avatarUrl: z.string().url().optional().or(z.literal('')),
+  socialLinks: z.array(z.string().url()).optional(),
+  photos: z.array(z.string().url()).optional(),
 });
 
 export const insertMessageSchema = createInsertSchema(messages).omit({
@@ -63,6 +91,7 @@ export const insertRoomSchema = createInsertSchema(rooms).omit({
 });
 
 export type InsertUser = z.infer<typeof insertUserSchema>;
+export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type User = typeof users.$inferSelect;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;

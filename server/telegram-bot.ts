@@ -32,13 +32,7 @@ try {
 
 const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
-// Generate anonymous name
-function generateAnonName(): string {
-  const prefixes = ['User', 'Anon', 'Guest', 'Member'];
-  const suffix = Math.floor(Math.random() * 9000) + 1000;
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-  return `${prefix}${suffix}`;
-}
+// Anonymous names are now auto-generated in storage as Student_{id}
 
 // Handle /start command
 bot.onText(/\/start/, async (msg) => {
@@ -55,7 +49,6 @@ bot.onText(/\/start/, async (msg) => {
       user = await storage.createUser({
         tgId: userId,
         username: username || null,
-        anonName: generateAnonName(),
         status: 'pending',
       });
     }
