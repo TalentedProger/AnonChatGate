@@ -52,25 +52,25 @@
 }
 
 .dark {
-  --background: hsl(0 0% 0%);
-  --foreground: hsl(200 6.6667% 91.1765%);
-  --card: hsl(228 9.8039% 10%);
-  --card-foreground: hsl(0 0% 85.0980%);
-  --popover: hsl(0 0% 0%);
-  --popover-foreground: hsl(200 6.6667% 91.1765%);
-  --primary: hsl(203.7736 87.6033% 52.5490%);
-  --primary-foreground: hsl(0 0% 100%);
-  --secondary: hsl(195.0000 15.3846% 94.9020%);
-  --secondary-foreground: hsl(210 25% 7.8431%);
-  --muted: hsl(0 0% 9.4118%);
-  --muted-foreground: hsl(210 3.3898% 46.2745%);
-  --accent: hsl(205.7143 70% 7.8431%);
-  --accent-foreground: hsl(203.7736 87.6033% 52.5490%);
-  --destructive: hsl(356.3033 90.5579% 54.3137%);
+  --background: hsl(220 27% 5%);
+  --foreground: hsl(0 0% 95%);
+  --card: hsl(220 27% 8%);
+  --card-foreground: hsl(0 0% 90%);
+  --popover: hsl(220 27% 5%);
+  --popover-foreground: hsl(0 0% 95%);
+  --primary: hsl(180 100% 50%);
+  --primary-foreground: hsl(220 27% 5%);
+  --secondary: hsl(270 50% 15%);
+  --secondary-foreground: hsl(300 100% 80%);
+  --muted: hsl(220 27% 12%);
+  --muted-foreground: hsl(0 0% 60%);
+  --accent: hsl(300 100% 50%);
+  --accent-foreground: hsl(220 27% 5%);
+  --destructive: hsl(0 80% 60%);
   --destructive-foreground: hsl(0 0% 100%);
-  --border: hsl(210 5.2632% 14.9020%);
-  --input: hsl(207.6923 27.6596% 18.4314%);
-  --ring: hsl(202.8169 89.1213% 53.1373%);
+  --border: hsl(220 27% 20%);
+  --input: hsl(220 27% 15%);
+  --ring: hsl(180 100% 50%);
   --chart-1: hsl(203.8863 88.2845% 53.1373%);
   --chart-2: hsl(159.7826 100% 36.0784%);
   --chart-3: hsl(42.0290 92.8251% 56.2745%);
@@ -106,4 +106,24 @@
   body {
     @apply font-sans antialiased bg-background text-foreground;
   }
+}
+
+/* Neon glow effects */
+.neon-glow {
+  box-shadow: 0 0 5px currentColor, 0 0 10px currentColor, 0 0 15px currentColor;
+}
+
+.neon-border {
+  border: 1px solid hsl(180 100% 50%);
+  box-shadow: 0 0 5px hsl(180 100% 50% / 0.5), inset 0 0 5px hsl(180 100% 50% / 0.2);
+}
+
+.neon-text {
+  text-shadow: 0 0 5px currentColor, 0 0 10px currentColor;
+}
+
+.glass-effect {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.1);
 }

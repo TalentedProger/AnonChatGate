@@ -34,27 +34,37 @@ const bot = new TelegramBot(BOT_TOKEN, { polling: true });
 
 // Anonymous names are now auto-generated in storage as Student_{id}
 
-// Handle /start command
-bot.onText(/\/start/, async (msg) => {
+// Handle all messages (including /start and other commands)
+bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const userId = BigInt(msg.from?.id || 0);
   const username = msg.from?.username;
+  const messageText = msg.text?.toLowerCase();
 
   try {
-    // Check if user already exists
-    let user = await storage.getUserByTgId(userId);
-    
-    if (!user) {
-      // Create new user with pending status
-      user = await storage.createUser({
-        tgId: userId,
-        username: username || null,
-        status: 'approved',
-      });
-    }
+    // Handle /start command or when user wants to access the app
+    if (messageText?.includes('/start') || messageText?.includes('старт') || messageText?.includes('начать')) {
+      // Check if user already exists
+      let user = await storage.getUserByTgId(userId);
+      
+      if (!user) {
+        // Create new user - auto-approve only in development
+        const userStatus = process.env.NODE_ENV === 'production' ? 'pending' : 'approved';
+        user = await storage.createUser({
+          tgId: userId,
+          username: username || null,
+          status: userStatus,
+        });
+      } else {
+        // Update existing user to approved status only in development
+        if (user.status !== 'approved' && process.env.NODE_ENV !== 'production') {
+          await storage.updateUserStatus(user.id, 'approved');
+          user = await storage.getUserByTgId(userId);
+        }
+      }
 
-    // Prepare welcome message with app description
-    const welcomeMessage = `🌟 **Добро пожаловать в студенческую соцсеть!**
+      // Prepare welcome message with app description
+      const welcomeMessage = `🌟 **Добро пожаловать в студенческую соцсеть!**
 
 🎓 Это платформа для студентов, где вы можете:
 • Знакомиться с однокурсниками анонимно
@@ -65,28 +75,52 @@ bot.onText(/\/start/, async (msg) => {
 ✅ **Статус:** Одобрено
 Вы можете сразу начать пользоваться приложением!`;
 
-    // Create keyboard with app launch button
-    const keyboard = {
-      inline_keyboard: [[
-        {
-          text: '🚀 Открыть чат',
-          web_app: { url: WEBAPP_URL }
-        }
-      ]]
-    };
+      // Create keyboard with app launch button
+      const keyboard = {
+        inline_keyboard: [[
+          {
+            text: '🚀 Открыть приложение',
+            web_app: { url: WEBAPP_URL }
+          }
+        ]]
+      };
 
-    await bot.sendMessage(chatId, 
-      welcomeMessage,
-      { 
-        parse_mode: 'Markdown',
-        reply_markup: keyboard
-      }
-    );
+      await bot.sendMessage(chatId, 
+        welcomeMessage,
+        { 
+          parse_mode: 'Markdown',
+          reply_markup: keyboard
+        }
+      );
+    } else {
+      // Handle other messages by showing the start keyboard
+      const keyboard = {
+        inline_keyboard: [[
+          {
+            text: '🚀 Открыть приложение',
+            web_app: { url: WEBAPP_URL }
+          }
+        ]]
+      };
+
+      await bot.sendMessage(chatId, 
+        '👋 Привет! Нажмите кнопку ниже, чтобы открыть студенческую соцсеть:',
+        { 
+          reply_markup: keyboard
+        }
+      );
+    }
 
   } catch (error) {
-    console.error('Error in /start command:', error);
+    console.error('Error in bot message handler:', error);
     console.error('Stack trace:', error instanceof Error ? error.stack : 'No stack trace');
-    await bot.sendMessage(chatId, 'Произошла ошибка. Попробуйте позже.');
+    
+    // Simple error response without revealing technical details
+    try {
+      await bot.sendMessage(chatId, '⚡ Попробуйте еще раз через несколько секунд.');
+    } catch (sendError) {
+      console.error('Failed to send error message:', sendError);
+    }
   }
 });
 

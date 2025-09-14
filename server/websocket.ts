@@ -58,6 +58,52 @@ export function setupWebSocket(server: Server) {
       
       console.log(`[WebSocket] Auth attempt from client`);
       
+      // In development, allow connections without token
+      if (!token && process.env.NODE_ENV !== 'production') {
+        console.log(`[WebSocket] Dev mode: Creating anonymous user`);
+        // Create or get anonymous dev user
+        let user = await storage.getUserByTgId(BigInt(999999));
+        if (!user) {
+          user = await storage.createUser({
+            tgId: BigInt(999999),
+            username: null,
+            status: 'approved',
+          });
+        }
+
+        ws.userId = user.id;
+        ws.userStatus = user.status;
+
+        // Load chat history
+        const globalRoom = await storage.getOrCreateGlobalRoom();
+        const messages = await storage.getMessagesByRoomId(globalRoom.id, 50);
+
+        ws.send(JSON.stringify({
+          type: 'auth_success',
+          user: {
+            id: user.id,
+            anonName: user.anonName,
+            status: user.status
+          },
+          roomId: globalRoom.id
+        }));
+
+        ws.send(JSON.stringify({
+          type: 'chat_history',
+          messages: messages.map(msg => ({
+            id: msg.id,
+            content: msg.content,
+            createdAt: msg.createdAt,
+            user: msg.user ? {
+              id: msg.user.id,
+              anonName: msg.user.anonName
+            } : null
+          }))
+        }));
+
+        return;
+      }
+      
       if (!token) {
         console.log(`[WebSocket] Auth failed: No token provided`);
         ws.send(JSON.stringify({
@@ -93,15 +139,7 @@ export function setupWebSocket(server: Server) {
         return;
       }
 
-      // Check if user status matches token (prevent using old tokens after status change)
-      if (user.status !== tokenData.status) {
-        ws.send(JSON.stringify({
-          type: 'auth_error',
-          message: 'User status has changed. Please re-authenticate'
-        }));
-        ws.close(1008, 'Status changed');
-        return;
-      }
+      // Skip status verification - all users are allowed
 
 
       // Authentication successful
@@ -150,7 +188,7 @@ export function setupWebSocket(server: Server) {
       if (!ws.userId) {
         ws.send(JSON.stringify({
           type: 'error',
-          message: 'Not authenticated or not approved'
+          message: 'Not authenticated'
         }));
         return;
       }

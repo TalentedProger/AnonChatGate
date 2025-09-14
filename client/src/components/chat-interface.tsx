@@ -70,12 +70,12 @@ export default function ChatInterface({
 
   const getAvatarColor = (userId: number) => {
     const colors = [
-      'from-blue-500 to-purple-600',
-      'from-green-500 to-teal-600',
-      'from-red-500 to-pink-600',
-      'from-yellow-500 to-orange-600',
-      'from-indigo-500 to-purple-600',
-      'from-pink-500 to-rose-600',
+      'from-cyan-400 to-blue-500',
+      'from-purple-500 to-pink-500',
+      'from-emerald-400 to-cyan-500',
+      'from-rose-400 to-pink-500',
+      'from-indigo-500 to-purple-500',
+      'from-teal-400 to-emerald-500',
     ];
     return colors[userId % colors.length];
   };
@@ -95,27 +95,27 @@ export default function ChatInterface({
     <div className="h-full flex flex-col">
       {/* Connection Status Banner */}
       {!isConnected && (
-        <div className="bg-destructive text-destructive-foreground text-center py-2 text-sm">
-          <span>Соединение потеряно... Переподключение</span>
-          <div className="inline-block w-4 h-4 border-2 border-destructive-foreground/30 border-t-destructive-foreground rounded-full animate-spin ml-2"></div>
+        <div className="bg-destructive/20 border-b border-destructive/50 text-destructive-foreground text-center py-2 text-sm backdrop-blur-sm">
+          <span className="neon-text">Соединение потеряно... Переподключение</span>
+          <div className="inline-block w-4 h-4 border-2 border-destructive/50 border-t-destructive rounded-full animate-spin ml-2 neon-glow"></div>
         </div>
       )}
 
       {/* Chat Header */}
-      <header className="bg-card border-b border-border px-4 py-3 flex items-center justify-between">
+      <header className="glass-effect border-b neon-border px-4 py-3 flex items-center justify-between">
         <div className="flex items-center">
-          <div className="w-8 h-8 bg-primary rounded-full flex items-center justify-center mr-3">
-            <span className="text-primary-foreground text-sm font-semibold">#</span>
+          <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center mr-3 neon-glow">
+            <span className="text-primary-foreground text-sm font-semibold neon-text">#</span>
           </div>
           <div>
-            <h1 className="font-semibold text-card-foreground">Анонимный чат</h1>
-            <p className="text-xs text-muted-foreground" data-testid="text-online-count">
-              {onlineCount} участников
+            <h1 className="font-semibold text-card-foreground neon-text">Анонимный чат</h1>
+            <p className="text-xs text-primary/80" data-testid="text-online-count">
+              {onlineCount} участников онлайн
             </p>
           </div>
         </div>
-        <button className="p-2 hover:bg-secondary rounded-full transition-colors">
-          <svg className="w-5 h-5 text-muted-foreground" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <button className="p-2 hover:bg-secondary/50 rounded-full transition-all duration-300 hover:neon-glow">
+          <svg className="w-5 h-5 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 5v.01M12 12v.01M12 19v.01M12 6a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2zm0 7a1 1 0 110-2 1 1 0 010 2z"></path>
           </svg>
         </button>
@@ -125,15 +125,15 @@ export default function ChatInterface({
       <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 ? (
           <div className="text-center py-8">
-            <div className="w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center mx-auto mb-4">
-              <svg className="w-8 h-8 text-primary" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <div className="w-16 h-16 bg-gradient-to-br from-primary/20 to-accent/20 rounded-full flex items-center justify-center mx-auto mb-4 neon-border">
+              <svg className="w-8 h-8 text-primary neon-glow" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"></path>
               </svg>
             </div>
-            <h3 className="text-lg font-semibold text-card-foreground mb-2">
+            <h3 className="text-lg font-semibold text-primary mb-2 neon-text">
               Добро пожаловать в анонимный чат!
             </h3>
-            <p className="text-muted-foreground text-sm max-w-xs mx-auto">
+            <p className="text-accent/80 text-sm max-w-xs mx-auto">
               Общайтесь анонимно с другими участниками. Будьте взаимно вежливы.
             </p>
           </div>
@@ -151,7 +151,9 @@ export default function ChatInterface({
                   isCurrentUser 
                     ? 'from-primary to-accent' 
                     : getAvatarColor(message.user?.id || 0)
-                } rounded-full flex items-center justify-center flex-shrink-0`}>
+                } rounded-full flex items-center justify-center flex-shrink-0 ${
+                  isCurrentUser ? 'neon-glow' : 'shadow-lg'
+                }`}>
                   <span className="text-white text-xs font-semibold">
                     {message.user ? getInitials(message.user.anonName) : '?'}
                   </span>
@@ -180,8 +182,8 @@ export default function ChatInterface({
                   
                   <div className={`rounded-lg px-3 py-2 ${
                     isCurrentUser 
-                      ? 'bg-primary text-primary-foreground rounded-tr-sm' 
-                      : 'bg-secondary/50 rounded-tl-sm'
+                      ? 'bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-tr-sm neon-glow' 
+                      : 'glass-effect rounded-tl-sm border border-primary/20'
                   }`}>
                     <p className="text-sm whitespace-pre-wrap">{message.content}</p>
                   </div>
@@ -194,7 +196,7 @@ export default function ChatInterface({
       </div>
 
       {/* Message Input */}
-      <div className="border-t border-border bg-card px-4 py-3">
+      <div className="glass-effect border-t neon-border px-4 py-3">
         <div className="flex items-end space-x-2">
           <div className="flex-1 relative">
             <textarea
@@ -203,14 +205,14 @@ export default function ChatInterface({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Введите сообщение..."
-              className="w-full resize-none bg-input border border-border rounded-2xl px-4 py-3 pr-12 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-all"
+              className="w-full resize-none glass-effect border border-primary/30 rounded-2xl px-4 py-3 pr-12 text-sm text-foreground placeholder-accent/60 focus:outline-none focus:border-primary focus:neon-glow transition-all duration-300"
               rows={1}
               maxLength={1000}
               disabled={!isConnected}
               data-testid="input-message"
             />
             <button 
-              className="absolute right-2 bottom-2 p-2 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-secondary"
+              className="absolute right-2 bottom-2 p-2 text-accent/60 hover:text-primary transition-all duration-300 rounded-full hover:bg-primary/20 hover:neon-glow"
               data-testid="button-attach"
             >
               <Paperclip className="w-4 h-4" />
@@ -220,7 +222,7 @@ export default function ChatInterface({
           <button 
             onClick={handleSend}
             disabled={!messageText.trim() || !isConnected}
-            className="bg-primary text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="bg-gradient-to-r from-primary to-accent text-primary-foreground rounded-full w-12 h-12 flex items-center justify-center hover:neon-glow transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:from-muted disabled:to-muted-foreground"
             data-testid="button-send"
           >
             <Send className="w-5 h-5" />
@@ -228,7 +230,7 @@ export default function ChatInterface({
         </div>
         
         <div className="mt-2 text-right">
-          <span className="text-xs text-muted-foreground" data-testid="text-char-counter">
+          <span className="text-xs text-accent/60" data-testid="text-char-counter">
             {messageText.length}/1000
           </span>
         </div>

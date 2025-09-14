@@ -35,31 +35,29 @@ export default function ChatPage() {
     initializeTelegramWebApp();
   }, []);
 
-  // Authentication query - skip when dev mode is active or already authenticated
+  // Authentication - use dev mode only in development
   const { data: authData, refetch: refetchAuth, isLoading: authLoading } = useQuery({
-    queryKey: ['/api/auth'],
+    queryKey: ['/api/auth/dev'],
     queryFn: async () => {
-      const initData = getInitData();
-      
-      console.log('[DEBUG] Frontend auth attempt:', {
-        hasInitData: !!initData,
-        initDataLength: initData?.length || 0,
-        initDataPreview: initData?.substring(0, 50) + '...',
-        isTelegramWebApp: !!window.Telegram?.WebApp,
-        windowLocation: window.location.href
-      });
-      
-      if (!initData) {
-        console.error('[DEBUG] No Telegram init data available');
-        throw new Error('No Telegram init data available');
+      // Only use dev auth in development environment
+      if (!import.meta.env.DEV) {
+        throw new Error('Dev authentication not available in production');
       }
-
-      const response = await apiRequest('POST', '/api/auth', { initData });
+      console.log('[DEBUG] Using simplified auth flow');
+      const response = await apiRequest('POST', '/api/auth/dev', {});
       return await response.json();
     },
     retry: 1,
-    enabled: !devMode && !auth.isAuthenticated(), // Skip if dev mode active or already authenticated
+    enabled: !auth.user && import.meta.env.DEV, // Only run in dev if no user is set
   });
+
+  // In development, create a simple user object if no auth data
+  const devUser = import.meta.env.DEV && !auth.user && !authData ? {
+    id: 999999,
+    anonName: 'DevUser_999999',
+    status: 'approved',
+    createdAt: new Date().toISOString()
+  } : null;
 
   // Update auth manager when auth data changes
   useEffect(() => {
@@ -75,7 +73,8 @@ export default function ChatPage() {
 
   // WebSocket connection
   useEffect(() => {
-    if (auth.user && auth.token) {
+    const currentUser = auth.user || authData?.user || devUser;
+    if (currentUser) {
       connectWebSocket();
     }
 
@@ -84,16 +83,11 @@ export default function ChatPage() {
         wsRef.current.close();
       }
     };
-  }, [auth.user, auth.token]);
+  }, [auth.user, auth.token, authData, devUser]);
 
   const connectWebSocket = async () => {
-    if (!auth.user || !auth.isAuthenticated()) return;
-
-    const token = await auth.getValidToken();
-    if (!token) {
-      console.error('No valid token available for WebSocket connection');
-      return;
-    }
+    const currentUser = auth.user || authData?.user || devUser;
+    if (!currentUser) return;
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const wsUrl = `${protocol}//${window.location.host}/ws`;
@@ -105,11 +99,21 @@ export default function ChatPage() {
       console.log('WebSocket connected');
       setIsConnected(true);
       
-      // Authenticate with WebSocket using JWT token
-      ws.send(JSON.stringify({
-        type: 'auth',
-        token: token
-      }));
+      // In development, auth can be optional
+      if (import.meta.env.DEV && devUser) {
+        console.log('Dev mode: Connecting without token');
+        ws.send(JSON.stringify({
+          type: 'auth'
+        }));
+      } else {
+        // Production or when we have a token
+        auth.getValidToken().then(token => {
+          ws.send(JSON.stringify({
+            type: 'auth',
+            token: token
+          }));
+        });
+      }
     };
 
     ws.onmessage = (event) => {
@@ -241,16 +245,17 @@ export default function ChatPage() {
     }
   };
 
-  // Show loading screen only during initial authentication
-  if ((!devMode && authLoading) || auth.status === 'loading') {
-    return <LoadingScreen onDevAuth={handleDevAuth} />;
+  // Show loading screen only during initial authentication in production
+  if ((!import.meta.env.DEV && authLoading) || (!import.meta.env.DEV && !auth.user && !authData)) {
+    return <LoadingScreen onDevAuth={handleDevAuth} message="Загрузка приложения..." />;
   }
 
-  // Show chat interface for all authenticated users
-  if (auth.user && auth.token) {
+  // Show chat interface for all users (dev mode allows without auth)
+  const currentUser = auth.user || authData?.user || devUser;
+  if (currentUser) {
     return (
       <ChatInterface
-        user={auth.user}
+        user={currentUser}
         messages={messages}
         onSendMessage={handleSendMessage}
         isConnected={isConnected}

@@ -151,52 +151,52 @@ export default function ProfilePage() {
 
   return (
     <div className="h-full flex flex-col bg-background p-4 space-y-4 overflow-y-auto pb-20">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <User size={20} />
-            Профиль пользователя
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
+      <div className="glass-effect neon-border rounded-lg">
+        <div className="p-6">
+          <div className="flex items-center gap-2 mb-6">
+            <div className="w-8 h-8 bg-gradient-to-br from-primary to-accent rounded-full flex items-center justify-center neon-glow">
+              <User size={20} className="text-primary-foreground" />
+            </div>
+            <h1 className="text-xl font-semibold text-primary neon-text">Профиль пользователя</h1>
+          </div>
           {/* Anonymous Identity */}
-          <div className="bg-muted/50 rounded-lg p-3">
-            <h3 className="font-semibold text-sm mb-1">Анонимное имя в чатах</h3>
-            <p className="text-lg font-mono text-primary">{auth.user?.anonName}</p>
-            <p className="text-xs text-muted-foreground">ID: {auth.user?.id}</p>
+          <div className="glass-effect border border-primary/30 rounded-lg p-4 mb-6">
+            <h3 className="font-semibold text-accent mb-2">Анонимное имя в чатах</h3>
+            <p className="text-lg font-mono text-primary neon-text">{auth.user?.anonName}</p>
+            <p className="text-xs text-accent/60">ID: {auth.user?.id}</p>
           </div>
 
-          <Separator />
+          <div className="h-px bg-gradient-to-r from-transparent via-primary to-transparent mb-6"></div>
 
           {/* Profile Form */}
           <div className="space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="font-semibold">Личная информация</h3>
+              <h3 className="font-semibold text-accent neon-text">Личная информация</h3>
               {!isEditing && (
-                <Button
+                <button
                   onClick={handleEdit}
-                  variant="outline"
-                  size="sm"
+                  className="glass-effect border border-primary/50 text-primary px-4 py-2 rounded-lg hover:neon-glow transition-all duration-300"
                   data-testid="button-edit-profile"
                 >
                   Редактировать
-                </Button>
+                </button>
               )}
             </div>
 
             {/* Display Name */}
             <div className="space-y-2">
-              <Label htmlFor="displayName">Имя *</Label>
+              <label htmlFor="displayName" className="text-accent/80 text-sm font-medium">Имя *</label>
               {isEditing ? (
-                <Input
+                <input
                   id="displayName"
                   value={formData.displayName}
                   onChange={(e) => setFormData(prev => ({ ...prev, displayName: e.target.value }))}
                   placeholder="Ваше имя"
+                  className="w-full glass-effect border border-primary/30 rounded-lg px-4 py-2 text-foreground placeholder-accent/60 focus:outline-none focus:border-primary focus:neon-glow transition-all duration-300"
                   data-testid="input-display-name"
                 />
               ) : (
-                <p className="text-sm p-2 bg-muted/30 rounded">
+                <p className="text-sm p-3 glass-effect border border-primary/20 rounded-lg">
                   {profile?.displayName || 'Не указано'}
                 </p>
               )}
@@ -352,27 +352,28 @@ export default function ProfilePage() {
 
             {/* Action Buttons */}
             {isEditing && (
-              <div className="flex gap-2 pt-4">
-                <Button
+              <div className="flex gap-3 pt-6">
+                <button
                   onClick={handleSave}
                   disabled={updateProfileMutation.isPending}
+                  className="bg-gradient-to-r from-primary to-accent text-primary-foreground px-6 py-2 rounded-lg hover:neon-glow transition-all duration-300 disabled:opacity-50"
                   data-testid="button-save-profile"
                 >
                   {updateProfileMutation.isPending ? 'Сохранение...' : 'Сохранить'}
-                </Button>
-                <Button
+                </button>
+                <button
                   onClick={handleCancel}
-                  variant="outline"
                   disabled={updateProfileMutation.isPending}
+                  className="glass-effect border border-accent/50 text-accent px-6 py-2 rounded-lg hover:border-accent hover:neon-glow transition-all duration-300 disabled:opacity-50"
                   data-testid="button-cancel-edit"
                 >
                   Отмена
-                </Button>
+                </button>
               </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </div>
   );
 }
