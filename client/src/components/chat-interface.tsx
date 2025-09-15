@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react';
 import { Send, Paperclip, ArrowLeft } from 'lucide-react';
+import mainGroupInternal from '@/assets/main_group_internal.jpg';
 
 interface User {
   id: number;
@@ -104,8 +105,12 @@ export default function ChatInterface({
           >
             <ArrowLeft className="w-5 h-5 text-white" />
           </button>
-          <div className="w-8 h-8 bg-zinc-700 rounded-full flex items-center justify-center mr-3">
-            <span className="text-white text-sm font-semibold">#</span>
+          <div className="w-8 h-8 rounded-full overflow-hidden mr-3">
+            <img 
+              src={mainGroupInternal} 
+              alt="Group Internal" 
+              className="w-full h-full object-cover"
+            />
           </div>
           <div>
             <h1 className="font-semibold text-white">Анонимный чат</h1>
