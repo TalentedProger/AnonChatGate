@@ -11,7 +11,7 @@ export default function ProfilePage() {
   const [menuOpen, setMenuOpen] = useState(false);
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white p-6 flex flex-col items-center">
+    <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white p-6 flex flex-col items-center pb-20">
       {/* Compact Switcher */}
       <div className="fixed top-6 left-6 flex items-center bg-white/10 backdrop-blur-md rounded-full p-1 z-50">
         {[

@@ -6,7 +6,7 @@ export default function HomePage() {
   const auth = useAuth();
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white overflow-y-auto pb-20">
+    <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white pb-20">
       <div className="flex flex-col items-center p-6 space-y-8">
         {/* Hero Section */}
         <motion.div 
