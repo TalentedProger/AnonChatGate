@@ -30,6 +30,31 @@ export default function HomePage() {
           </div>
         </motion.div>
 
+        {/* User Profile Card - Mobile only - show after hero */}
+        {auth.user && (
+          <motion.div
+            initial={{ opacity: 0, scale: 0.9 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, delay: 0.7 }}
+            className="w-full max-w-4xl md:hidden"
+          >
+            <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+              <div className="flex items-center space-x-4 mb-4">
+                <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 via-violet-400 to-pink-400 flex items-center justify-center text-black font-bold text-lg">
+                  {auth.user.anonName?.charAt(auth.user.anonName.length - 1) || '?'}
+                </div>
+                <div>
+                  <h3 className="text-lg font-semibold text-white">{auth.user.anonName}</h3>
+                  <p className="text-sm text-cyan-300">ID: {auth.user.id}</p>
+                </div>
+                <div className="ml-auto w-3 h-3 rounded-full bg-green-400 animate-pulse"></div>
+              </div>
+              <div className="bg-white/5 rounded-xl p-3">
+                <p className="text-sm text-gray-300">Статус: <span className="text-green-400 font-medium">Активен</span></p>
+              </div>
+            </div>
+          </motion.div>
+        )}
 
         {/* Feature Cards */}
         <div className="w-full max-w-4xl grid md:grid-cols-2 gap-6">
@@ -65,12 +90,13 @@ export default function HomePage() {
 
         {/* Bottom Row - User Card and Privacy */}
         <div className="w-full max-w-4xl grid md:grid-cols-2 gap-6">
-          {/* User Profile Card - moved here */}
+          {/* User Profile Card - Desktop only */}
           {auth.user && (
             <motion.div
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.7 }}
+              className="hidden md:block"
             >
               <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 h-full">
                 <div className="flex items-center space-x-4 mb-4">
