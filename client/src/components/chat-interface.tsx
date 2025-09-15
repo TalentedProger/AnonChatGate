@@ -208,7 +208,7 @@ export default function ChatInterface({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Введите сообщение..."
-              className="w-full resize-none bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 pr-12 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+              className="w-full resize-none bg-black border border-zinc-700 rounded-2xl px-4 py-3 pr-12 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
               rows={1}
               maxLength={1000}
               disabled={!isConnected}
