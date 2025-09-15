@@ -219,7 +219,7 @@ export default function ChatInterface({
           <button 
             onClick={handleSend}
             disabled={!messageText.trim() || !isConnected}
-            className="bg-blue-600 text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-zinc-700"
+            className="bg-purple-600 text-white rounded-full w-12 h-12 flex items-center justify-center hover:bg-purple-700 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:bg-zinc-700 shadow-lg shadow-purple-500/50 hover:shadow-xl hover:shadow-purple-400/60 ring-2 ring-purple-500/30 hover:ring-purple-400/50"
             data-testid="button-send"
           >
             <Send className="w-5 h-5" />
