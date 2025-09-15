@@ -7,7 +7,7 @@ interface LayoutProps {
 
 export default function Layout({ children }: LayoutProps) {
   const [location] = useLocation();
-  const isInChat = location.startsWith('/chat');
+  const isInChat = location === '/chat';
 
   return (
     <div className="h-screen bg-background font-sans flex flex-col">
