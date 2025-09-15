@@ -72,7 +72,7 @@ export default function HomePage() {
               animate={{ opacity: 1, scale: 1 }}
               transition={{ duration: 0.5, delay: 0.7 }}
             >
-              <div className="bg-black/40 backdrop-blur-md rounded-2xl p-6 border-2 border-cyan-500/30 shadow-[0_0_20px_#00ffff20]">
+              <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 h-full">
                 <div className="flex items-center space-x-4 mb-4">
                   <div className="w-12 h-12 rounded-full bg-gradient-to-br from-cyan-400 via-violet-400 to-pink-400 flex items-center justify-center text-black font-bold text-lg">
                     {auth.user.anonName?.charAt(auth.user.anonName.length - 1) || '?'}
