@@ -1,5 +1,6 @@
 import { Link } from 'wouter';
-import { MessageSquare, ArrowRight } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
+import mainGroupImage from '@/assets/main_group_image.jpg';
 
 export default function ChatsPage() {
   return (
@@ -15,8 +16,12 @@ export default function ChatsPage() {
           <div className="bg-zinc-900 rounded-lg p-4 border border-zinc-800 hover:bg-zinc-800 transition-colors cursor-pointer">
             <div className="flex items-center justify-between">
               <div className="flex items-center space-x-3">
-                <div className="w-12 h-12 bg-zinc-700 rounded-full flex items-center justify-center">
-                  <MessageSquare className="w-6 h-6 text-white" />
+                <div className="w-12 h-12 rounded-full overflow-hidden">
+                  <img 
+                    src={mainGroupImage} 
+                    alt="Main Group" 
+                    className="w-full h-full object-cover"
+                  />
                 </div>
                 <div>
                   <h3 className="font-medium text-white" data-testid="text-chat-name">
