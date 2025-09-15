@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { Send, Paperclip, ArrowLeft } from 'lucide-react';
+import { Send, ArrowLeft } from 'lucide-react';
 import mainGroupInternal from '@/assets/main_group_internal.jpg';
 
 interface User {
@@ -208,18 +208,12 @@ export default function ChatInterface({
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
               placeholder="Введите сообщение..."
-              className="w-full resize-none bg-black border border-zinc-700 rounded-2xl px-4 py-3 pr-12 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
+              className="w-full resize-none bg-black border border-zinc-700 rounded-2xl px-4 py-3 pr-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-600 transition-colors"
               rows={1}
               maxLength={1000}
               disabled={!isConnected}
               data-testid="input-message"
             />
-            <button 
-              className="absolute right-2 bottom-2 p-2 text-zinc-500 hover:text-zinc-400 transition-colors rounded-full hover:bg-zinc-800"
-              data-testid="button-attach"
-            >
-              <Paperclip className="w-4 h-4" />
-            </button>
           </div>
           
           <button 
