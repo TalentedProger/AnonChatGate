@@ -11,7 +11,7 @@ export const users = pgTable("users", {
   anonName: text("anon_name"),
   status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
   // Profile fields
-  displayName: text("display_name"),
+  displayName: text("display_name").unique(),
   course: text("course", { enum: ["1", "2", "3", "4", "5", "6"] }),
   direction: text("direction"),
   bio: text("bio"),
