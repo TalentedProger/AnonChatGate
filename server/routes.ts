@@ -2,8 +2,10 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { setupWebSocket } from "./websocket";
-import { insertUserSchema, insertProfileSchema } from "@shared/schema";
+import { insertUserSchema, insertProfileSchema, usernameSchema, users } from "@shared/schema";
 import { generateAuthToken, generateRefreshToken, verifyRefreshToken, verifyAuthToken } from "./auth";
+import { db } from "./db";
+import { eq } from "drizzle-orm";
 import crypto from 'crypto';
 import querystring from 'querystring';
 
@@ -271,6 +273,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           course: user.course,
           direction: user.direction,
           bio: user.bio,
+          gender: user.gender,
           avatarUrl: user.avatarUrl,
           socialLinks: user.socialLinks || [],
           photos: user.photos || [],
@@ -283,6 +286,35 @@ export async function registerRoutes(app: Express): Promise<Server> {
     } catch (error) {
       console.error('Get profile error:', error);
       res.status(500).json({ error: 'Failed to get profile' });
+    }
+  });
+
+  // Check username availability
+  app.get('/api/check-username/:username', async (req, res) => {
+    try {
+      const { username } = req.params;
+      
+      // Validate username format
+      try {
+        usernameSchema.parse(username);
+      } catch (error) {
+        return res.json({ 
+          available: false, 
+          error: 'Неверный формат имени пользователя' 
+        });
+      }
+
+      // Check if username exists (case-insensitive)
+      const existingUsers = await db.select().from(users).where(eq(users.displayName, username.toLowerCase()));
+      
+      res.json({
+        available: existingUsers.length === 0,
+        error: existingUsers.length > 0 ? 'Имя пользователя уже занято' : null
+      });
+
+    } catch (error) {
+      console.error('Username check error:', error);
+      res.status(500).json({ error: 'Failed to check username' });
     }
   });
 
@@ -312,6 +344,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           course: finalUser.course,
           direction: finalUser.direction,
           bio: finalUser.bio,
+          gender: finalUser.gender,
           avatarUrl: finalUser.avatarUrl,
           socialLinks: finalUser.socialLinks || [],
           photos: finalUser.photos || [],
