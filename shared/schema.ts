@@ -12,9 +12,10 @@ export const users = pgTable("users", {
   status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
   // Profile fields
   displayName: text("display_name"),
-  course: text("course"),
+  course: text("course", { enum: ["1", "2", "3", "4", "5", "6"] }),
   direction: text("direction"),
   bio: text("bio"),
+  gender: text("gender", { enum: ["male", "female"] }),
   avatarUrl: text("avatar_url"),
   socialLinks: text("social_links").array(),
   photos: text("photos").array(),
@@ -62,19 +63,27 @@ export const insertUserSchema = createInsertSchema(users).omit({
   anonName: true, // Will be auto-generated based on user ID
 });
 
+// Username validation schema
+export const usernameSchema = z.string()
+  .min(3, "Имя пользователя должно содержать минимум 3 символа")
+  .max(32, "Имя пользователя должно содержать максимум 32 символа")
+  .regex(/^[A-Za-z0-9_-]+$/, "Имя пользователя может содержать только латинские буквы, цифры, _ и -");
+
 export const insertProfileSchema = createInsertSchema(users).pick({
   displayName: true,
   course: true, 
   direction: true,
   bio: true,
+  gender: true,
   avatarUrl: true,
   socialLinks: true,
   photos: true,
 }).extend({
-  displayName: z.string().min(1, "Имя пользователя обязательно"),
-  course: z.string().min(1, "Курс обязателен"),
+  displayName: usernameSchema,
+  course: z.enum(["1", "2", "3", "4", "5", "6"], { required_error: "Курс обязателен" }),
   direction: z.string().min(1, "Направление обязательно"),
   bio: z.string().optional(),
+  gender: z.enum(["male", "female"], { required_error: "Пол обязателен" }),
   avatarUrl: z.string().url().optional().or(z.literal('')),
   socialLinks: z.array(z.string().url()).optional(),
   photos: z.array(z.string().url()).optional(),
