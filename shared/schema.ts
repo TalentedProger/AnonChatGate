@@ -85,7 +85,7 @@ export const insertProfileSchema = createInsertSchema(users).pick({
   bio: z.string().optional(),
   gender: z.enum(["male", "female"], { required_error: "Пол обязателен" }),
   avatarUrl: z.string().url().optional().or(z.literal('')),
-  socialLinks: z.array(z.string().url()).optional(),
+  socialLinks: z.array(z.string()).optional(),
   photos: z.array(z.string().url()).optional(),
 });
 

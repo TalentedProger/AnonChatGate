@@ -7,6 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useLocation } from 'wouter';
 import { usernameSchema } from '@shared/schema';
+import { useAuth } from '@/lib/auth';
+import { apiRequest } from '@/lib/queryClient';
 import { z } from 'zod';
 
 interface RegistrationData {
@@ -23,6 +25,7 @@ interface RegistrationData {
 
 export default function RegistrationPage() {
   const [, setLocation] = useLocation();
+  const auth = useAuth();
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 3;
   const [formData, setFormData] = useState<RegistrationData>({
@@ -39,6 +42,7 @@ export default function RegistrationPage() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isCheckingUsername, setIsCheckingUsername] = useState(false);
 
   const updateFormData = (field: keyof RegistrationData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -94,11 +98,53 @@ export default function RegistrationPage() {
     }
   };
 
+  const checkUsernameAvailability = async (username: string): Promise<boolean> => {
+    if (!username.trim()) return false;
+    
+    try {
+      const response = await apiRequest('GET', `/api/check-username/${encodeURIComponent(username.toLowerCase())}`);
+      const data = await response.json();
+      return data.available;
+    } catch (error) {
+      console.error('Username check failed:', error);
+      return false;
+    }
+  };
+
+  const handleUsernameBlur = async () => {
+    if (!formData.displayName.trim()) return;
+    
+    // Validate format first
+    try {
+      usernameSchema.parse(formData.displayName);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        setErrors(prev => ({ ...prev, displayName: error.issues[0]?.message || 'Неверное имя пользователя' }));
+      }
+      return;
+    }
+
+    setIsCheckingUsername(true);
+    const isAvailable = await checkUsernameAvailability(formData.displayName);
+    if (!isAvailable) {
+      setErrors(prev => ({ ...prev, displayName: 'Имя пользователя уже занято' }));
+    }
+    setIsCheckingUsername(false);
+  };
+
   const handleSubmit = async () => {
     if (!validateStep(1)) return;
 
     setIsSubmitting(true);
     try {
+      // Check username uniqueness first
+      const isAvailable = await checkUsernameAvailability(formData.displayName);
+      if (!isAvailable) {
+        setErrors({ displayName: 'Имя пользователя уже занято' });
+        setIsSubmitting(false);
+        return;
+      }
+
       // Build social links array
       const socialLinks = [];
       if (formData.telegram.trim()) socialLinks.push(formData.telegram);
@@ -107,7 +153,7 @@ export default function RegistrationPage() {
 
       // For now, we'll submit the basic profile data
       const profileData = {
-        displayName: formData.displayName,
+        displayName: formData.displayName.toLowerCase(), // Store as lowercase for consistency
         gender: formData.gender,
         course: formData.course,
         direction: formData.direction,
@@ -116,15 +162,7 @@ export default function RegistrationPage() {
         photos: [] // Will be implemented later with image upload
       };
 
-      const token = localStorage.getItem('auth_token');
-      const response = await fetch('/api/profile', {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`
-        },
-        body: JSON.stringify(profileData)
-      });
+      const response = await apiRequest('PATCH', '/api/profile', profileData);
 
       if (response.ok) {
         setLocation('/');
@@ -223,9 +261,14 @@ export default function RegistrationPage() {
                   placeholder="Введите имя"
                   value={formData.displayName}
                   onChange={(e) => updateFormData('displayName', e.target.value)}
+                  onBlur={handleUsernameBlur}
+                  disabled={isCheckingUsername}
                 />
                 {errors.displayName && (
                   <p className="text-red-400 text-sm mt-1">{errors.displayName}</p>
+                )}
+                {isCheckingUsername && (
+                  <p className="text-blue-400 text-sm mt-1">Проверяем доступность имени...</p>
                 )}
               </div>
 

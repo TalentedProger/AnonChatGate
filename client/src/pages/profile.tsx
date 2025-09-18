@@ -2,13 +2,41 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { motion, AnimatePresence } from "framer-motion";
 import { Heart, Star, Send, Instagram, Settings, Plus, EyeOff } from "lucide-react";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from '@/lib/auth';
+import { apiRequest } from '@/lib/queryClient';
+import maleProfile from '@/assets/male_profile.jpg';
+import femaleProfile from '@/assets/female_profile.jpg';
 
 export default function ProfilePage() {
   const auth = useAuth();
   const [activeProfile, setActiveProfile] = useState("main");
   const [menuOpen, setMenuOpen] = useState(false);
+  const [profile, setProfile] = useState<any>(null);
+
+  // Load user profile data
+  useEffect(() => {
+    const loadProfile = async () => {
+      try {
+        const response = await apiRequest('GET', '/api/profile');
+        if (response.ok) {
+          const data = await response.json();
+          setProfile(data.profile);
+        }
+      } catch (error) {
+        console.error('Failed to load profile:', error);
+      }
+    };
+
+    if (auth.isAuthenticated()) {
+      loadProfile();
+    }
+  }, [auth]);
+
+  const getProfileAvatar = (): string | undefined => {
+    if (!profile?.gender) return undefined;
+    return profile.gender === 'male' ? maleProfile : femaleProfile;
+  };
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white p-6 flex flex-col items-center pb-20">
@@ -75,12 +103,20 @@ export default function ProfilePage() {
               transition={{ duration: 0.3 }}
               className="flex flex-col items-center space-y-6"
             >
-              <div className="relative w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
-                <span className="text-3xl font-bold text-white">1</span>
+              <div className="relative w-32 h-32 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
+                {getProfileAvatar() ? (
+                  <img src={getProfileAvatar()} alt="Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl font-bold text-white">?</span>
+                )}
                 <div className="absolute bottom-2 right-2 w-4 h-4 rounded-full bg-green-500 border-2 border-black"></div>
               </div>
-              <h1 className="text-2xl font-bold text-white" data-testid="text-profile-name">CyberStudent</h1>
-              <p className="text-sm text-indigo-300" data-testid="text-profile-course">3 курс • Прикладная информатика</p>
+              <h1 className="text-2xl font-bold text-white" data-testid="text-profile-name">
+                {profile?.displayName || 'Пользователь'}
+              </h1>
+              <p className="text-sm text-indigo-300" data-testid="text-profile-course">
+                {profile?.course && profile?.direction ? `${profile.course} курс • ${profile.direction}` : 'Профиль не заполнен'}
+              </p>
 
               {/* Metrics */}
               <div className="grid grid-cols-2 gap-4 w-full">
@@ -101,7 +137,7 @@ export default function ProfilePage() {
               {/* About */}
               <Section title="О себе">
                 <p className="text-gray-300" data-testid="text-profile-bio">
-                  Люблю создавать интерфейсы будущего. Код для меня — это искусство, а дизайн — способ общения. Люблю создавать интерфейсы будущего. Код для меня — это искусство, а дизайн — способ общения.
+                  {profile?.bio || 'Пользователь ещё не рассказал о себе.'}
                 </p>
               </Section>
 
@@ -138,8 +174,12 @@ export default function ProfilePage() {
               transition={{ duration: 0.3 }}
               className="flex flex-col items-center space-y-6"
             >
-              <div className="relative w-32 h-32 rounded-full flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
-                <span className="text-3xl font-bold text-white">1</span>
+              <div className="relative w-32 h-32 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
+                {getProfileAvatar() ? (
+                  <img src={getProfileAvatar()} alt="Anonymous Profile" className="w-full h-full object-cover" />
+                ) : (
+                  <span className="text-3xl font-bold text-white">?</span>
+                )}
                 <div className="absolute bottom-2 right-2 w-4 h-4 rounded-full bg-green-500 border-2 border-black"></div>
               </div>
               <h2 className="text-2xl font-bold" data-testid="text-anon-name">{auth.user?.anonName || 'Student_1'}</h2>
