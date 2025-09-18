@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -43,6 +43,38 @@ export default function RegistrationPage() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
+
+  // Auto-authenticate in development mode
+  useEffect(() => {
+    const authenticateForDev = async () => {
+      // Only auto-authenticate in development if not already authenticated
+      if (import.meta.env.DEV && !auth.isAuthenticated() && !isAuthenticating) {
+        setIsAuthenticating(true);
+        try {
+          const response = await fetch('/api/auth/dev', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          });
+          
+          if (response.ok) {
+            const authData = await response.json();
+            auth.setAuthData(authData);
+            console.log('[DEV] Auto-authenticated for registration');
+          } else {
+            console.error('[DEV] Auto-authentication failed:', await response.text());
+          }
+        } catch (error) {
+          console.error('[DEV] Auto-authentication error:', error);
+        } finally {
+          setIsAuthenticating(false);
+        }
+      }
+    };
+
+    authenticateForDev();
+  }, [auth, isAuthenticating]);
 
   const updateFormData = (field: keyof RegistrationData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
