@@ -8,19 +8,44 @@ import HomePage from "@/pages/home";
 import ChatsPage from "@/pages/chats";
 import ChatPage from "@/pages/chat";
 import ProfilePage from "@/pages/profile";
+import EntryPage from "@/pages/entry";
+import RegistrationPage from "@/pages/registration";
 import NotFoundPage from "@/pages/not-found";
 
 function Router() {
   return (
-    <Layout>
-      <Switch>
-        <Route path="/" component={HomePage} />
-        <Route path="/chats" component={ChatsPage} />
-        <Route path="/chat" component={ChatPage} />
-        <Route path="/profile" component={ProfilePage} />
-        <Route path="*" component={NotFoundPage} />
-      </Switch>
-    </Layout>
+    <Switch>
+      {/* Full-screen routes without layout */}
+      <Route path="/entry" component={EntryPage} />
+      <Route path="/register" component={RegistrationPage} />
+      
+      {/* Main app routes with layout */}
+      <Route path="/">
+        <Layout>
+          <HomePage />
+        </Layout>
+      </Route>
+      <Route path="/chats">
+        <Layout>
+          <ChatsPage />
+        </Layout>
+      </Route>
+      <Route path="/chat">
+        <Layout>
+          <ChatPage />
+        </Layout>
+      </Route>
+      <Route path="/profile">
+        <Layout>
+          <ProfilePage />
+        </Layout>
+      </Route>
+      <Route path="*">
+        <Layout>
+          <NotFoundPage />
+        </Layout>
+      </Route>
+    </Switch>
   );
 }
 
