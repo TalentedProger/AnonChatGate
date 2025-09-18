@@ -23,6 +23,12 @@ interface RegistrationData {
   photos: File[];
 }
 
+// Unified field styles for consistent appearance
+const fieldBaseClasses = "w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50";
+const textareaClasses = "w-full h-[108px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 py-3 resize-none placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50";
+const selectTriggerClasses = "w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 data-[placeholder]:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50";
+const fileInputClasses = "w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-white/20 file:text-white hover:file:bg-white/30 file:transition-colors";
+
 export default function RegistrationPage() {
   const [, setLocation] = useLocation();
   const auth = useAuth();
@@ -289,7 +295,7 @@ export default function RegistrationPage() {
                 </Label>
                 <Input
                   id="displayName"
-                  className="w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 placeholder:text-white/50"
+                  className={fieldBaseClasses}
                   placeholder="Введите имя"
                   value={formData.displayName}
                   onChange={(e) => updateFormData('displayName', e.target.value)}
@@ -309,7 +315,7 @@ export default function RegistrationPage() {
                   Ваш пол:
                 </Label>
                 <Select value={formData.gender} onValueChange={(value) => updateFormData('gender', value)}>
-                  <SelectTrigger className="w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4">
+                  <SelectTrigger className={selectTriggerClasses}>
                     <SelectValue placeholder="Выберите пол" />
                   </SelectTrigger>
                   <SelectContent>
@@ -327,7 +333,7 @@ export default function RegistrationPage() {
                   Выберите курс:
                 </Label>
                 <Select value={formData.course} onValueChange={(value) => updateFormData('course', value)}>
-                  <SelectTrigger className="w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4">
+                  <SelectTrigger className={selectTriggerClasses}>
                     <SelectValue placeholder="Выберите курс" />
                   </SelectTrigger>
                   <SelectContent>
@@ -347,7 +353,7 @@ export default function RegistrationPage() {
                 </Label>
                 <Input
                   id="direction"
-                  className="w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 placeholder:text-white/50"
+                  className={fieldBaseClasses}
                   placeholder="Например, Программирование"
                   value={formData.direction}
                   onChange={(e) => updateFormData('direction', e.target.value)}
@@ -363,7 +369,7 @@ export default function RegistrationPage() {
                 </Label>
                 <Textarea
                   id="bio"
-                  className="w-full h-[108px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 py-3 resize-none placeholder:text-white/50"
+                  className={textareaClasses}
                   placeholder="Напишите немного о себе"
                   value={formData.bio}
                   onChange={(e) => updateFormData('bio', e.target.value)}
@@ -397,7 +403,7 @@ export default function RegistrationPage() {
                 </Label>
                 <Input
                   id="telegram"
-                  className="w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 placeholder:text-white/50"
+                  className={fieldBaseClasses}
                   placeholder="https://t.me/username"
                   value={formData.telegram}
                   onChange={(e) => updateFormData('telegram', e.target.value)}
@@ -410,7 +416,7 @@ export default function RegistrationPage() {
                 </Label>
                 <Input
                   id="instagram"
-                  className="w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 placeholder:text-white/50"
+                  className={fieldBaseClasses}
                   placeholder="https://instagram.com/username"
                   value={formData.instagram}
                   onChange={(e) => updateFormData('instagram', e.target.value)}
@@ -423,7 +429,7 @@ export default function RegistrationPage() {
                 </Label>
                 <Input
                   id="vk"
-                  className="w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 placeholder:text-white/50"
+                  className={fieldBaseClasses}
                   placeholder="https://vk.com/username"
                   value={formData.vk}
                   onChange={(e) => updateFormData('vk', e.target.value)}
@@ -467,7 +473,7 @@ export default function RegistrationPage() {
                   <Input
                     type="file"
                     accept="image/*"
-                    className="w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-violet-50 file:text-violet-700 hover:file:bg-violet-100"
+                    className={fileInputClasses}
                   />
                 </div>
               ))}
