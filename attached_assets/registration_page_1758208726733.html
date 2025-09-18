@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>AguGram — Регистрация</title>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@400;600;700;800&display=swap" rel="stylesheet">
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    :root{
+      --bg-top:#0A1A2F;
+      --bg-bottom:#000000;
+      --accent-1:#C42DFF;
+      --accent-2:#4A90FF;
+      --progress:#5800EF;
+    }
+
+    html,body{ height:100%; margin:0; font-family: 'Raleway', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial; }
+
+    .page-bg{
+      background: linear-gradient(180deg,var(--bg-top) 0%, var(--bg-bottom) 100%);
+      min-height:100vh;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      padding:24px;
+    }
+
+    .frame{
+      width:428px; max-width:100%; height:926px; border-radius:24px; box-sizing:border-box;
+      padding:28px; display:flex; align-items:center; justify-content:center;
+    }
+
+    .card{
+      width:100%; max-width:380px; border-radius:28px; padding:20px 20px 28px 20px; box-sizing:border-box;
+      background: rgba(255,255,255,0.08);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 12px 30px rgba(2,6,23,0.18);
+      color:#fff;
+      display:flex; flex-direction:column;
+      position:relative;
+    }
+
+    .back-btn{
+      position:absolute; top:16px; left:16px; width:36px; height:36px; border-radius:50%; border:none;
+      background:rgba(255,255,255,0.2); color:#fff; display:flex; align-items:center; justify-content:center;
+      cursor:pointer; font-size:18px; line-height:1;
+    }
+
+    .logo-small{ width:92px; height:34px; display:flex; align-items:center; justify-content:center; margin:6px auto 10px; }
+
+    .page-title{ font-size:32px; line-height:1.05; font-weight:800; text-align:center; margin-top:6px;
+      background: linear-gradient(90deg,var(--accent-1),var(--accent-2)); -webkit-background-clip:text; -webkit-text-fill-color:transparent; }
+    .step-sub{ font-size:14px; color:#d1d5db; text-align:center; margin-top:6px; font-weight:600 }
+
+    /* Progress segmented */
+    .progress-wrap{ margin-top:14px; margin-bottom:18px; display:flex; gap:6px; }
+    .progress-segment{ flex:1; height:6px; border-radius:6px; background:rgba(255,255,255,0.1); box-shadow:0 0 8px rgba(88,0,239,0.6); }
+    .progress-segment.active{ background: var(--progress); box-shadow:0 0 12px rgba(88,0,239,0.9); }
+
+    .form{ display:flex; flex-direction:column; gap:26px; margin-top:4px; }
+    label{ font-size:15px; color:#fff; margin-bottom:8px; display:block; font-weight:700 }
+    .spaced-label{ margin-top:24px; } /* уменьшенный отступ */
+
+    .input-field{
+      width:100%; height:54px; border-radius:16px; border:none; outline:none; box-sizing:border-box; padding:0 16px; display:flex; align-items:center;
+      background: rgba(255,255,255,0.12); color: #fff; font-size:15px;
+    }
+    .input-field::placeholder{ color: rgba(255,255,255,0.5); }
+
+    .textarea-field{
+      width:100%; height:108px; border-radius:16px; border:none; outline:none; box-sizing:border-box; padding:12px 16px;
+      background: rgba(255,255,255,0.12); color:#fff; font-size:15px; resize:none;
+    }
+
+    .primary-btn{ margin-top:18px; width:100%; height:46px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-weight:700; font-size:16px; color:white; background: linear-gradient(90deg,var(--accent-1),var(--accent-2)); border:none; box-shadow: 0 8px 18px rgba(68,47,255,0.12); cursor:pointer; transition:opacity 0.3s ease }
+    .skip-btn{ margin-top:12px; width:100%; height:46px; border-radius:999px; display:flex; align-items:center; justify-content:center; font-weight:600; font-size:15px; color:#fff; background: rgba(255,255,255,0.15); border:none; cursor:pointer; transition:background 0.3s ease }
+    .skip-btn:hover{ background: rgba(255,255,255,0.25) }
+
+    .step{ opacity:0; transform:translateX(20px); position:absolute; width:100%; transition:all 0.4s ease }
+    .step.active{ opacity:1; transform:translateX(0); position:relative }
+
+    @media (max-width:420px){ .card{ max-width:100%; border-radius:20px } .page-title{ font-size:28px } }
+  </style>
+</head>
+<body>
+  <div class="page-bg">
+    <div class="frame">
+      <div class="card" role="main">
+        <button type="button" class="back-btn" onclick="prevStep()">←</button>
+        <div class="logo-small">
+          <svg width="92" height="34" viewBox="0 0 120 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <text x="50%" y="60%" dominant-baseline="middle" text-anchor="middle" font-family="Raleway" font-weight="800" font-size="26" fill="white">AguGram</text>
+          </svg>
+        </div>
+
+        <h1 class="page-title">Создать аккаунт</h1>
+        <div class="step-sub" id="step-sub">Шаг 1 из 3: Личная информация</div>
+
+        <div class="progress-wrap">
+          <div class="progress-segment" id="seg1"></div>
+          <div class="progress-segment" id="seg2"></div>
+          <div class="progress-segment" id="seg3"></div>
+        </div>
+
+        <form class="form" id="regForm" onsubmit="event.preventDefault(); nextStep();">
+          <div class="step step-1 active">
+            <div>
+              <label for="name">Ваше имя:</label>
+              <input id="name" class="input-field" placeholder="Введите имя" />
+            </div>
+            <div>
+              <label for="course" class="spaced-label">Выберите курс:</label>
+              <input id="course" class="input-field" placeholder="Например, 2 курс" />
+            </div>
+            <div>
+              <label for="direction" class="spaced-label">Выберите направление:</label>
+              <input id="direction" class="input-field" placeholder="Например, Программирование" />
+            </div>
+            <div>
+              <label for="about" class="spaced-label">О себе:</label>
+              <textarea id="about" class="textarea-field" placeholder="Напишите немного о себе"></textarea>
+            </div>
+            <button class="primary-btn" type="submit">Продолжить</button>
+          </div>
+
+          <div class="step step-2">
+            <div>
+              <label for="tg">Ссылка на Telegram:</label>
+              <input id="tg" class="input-field" placeholder="https://t.me/username" />
+            </div>
+            <div>
+              <label for="inst" class="spaced-label">Ссылка на Instagram:</label>
+              <input id="inst" class="input-field" placeholder="https://instagram.com/username" />
+            </div>
+            <div>
+              <label for="vk" class="spaced-label">Ссылка на ВК:</label>
+              <input id="vk" class="input-field" placeholder="https://vk.com/username" />
+            </div>
+            <button type="button" class="primary-btn" onclick="nextStep()">Продолжить</button>
+            <button type="button" class="skip-btn" onclick="nextStep()">Пропустить</button>
+          </div>
+
+          <div class="step step-3">
+            <div>
+              <label class="spaced-label">Добавьте фото в профиль:</label>
+              <input type="file" accept="image/*" class="input-field" />
+            </div>
+            <div>
+              <label class="spaced-label">Добавьте фото в профиль:</label>
+              <input type="file" accept="image/*" class="input-field" />
+            </div>
+            <div>
+              <label class="spaced-label">Добавьте фото в профиль:</label>
+              <input type="file" accept="image/*" class="input-field" />
+            </div>
+            <button type="button" class="primary-btn" onclick="nextStep()">Продолжить</button>
+            <button type="button" class="skip-btn" onclick="nextStep()">Пропустить</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let currentStep = 1;
+    const totalSteps = 3;
+
+    function updateProgress(){
+      for(let i=1;i<=totalSteps;i++){
+        document.getElementById(`seg${i}`).classList.remove('active');
+        if(i<=currentStep){
+          document.getElementById(`seg${i}`).classList.add('active');
+        }
+      }
+    }
+
+    function showStep(step){
+      document.querySelectorAll('.step').forEach(el=>{
+        el.classList.remove('active');
+      });
+      document.querySelector(`.step-${step}`).classList.add('active');
+      document.getElementById('step-sub').innerText = `Шаг ${step} из ${totalSteps}`;
+      updateProgress();
+    }
+
+    function nextStep(){
+      currentStep++;
+      if(currentStep>totalSteps){ currentStep=1; }
+      showStep(currentStep);
+    }
+
+    function prevStep(){
+      currentStep--;
+      if(currentStep<1){ currentStep=1; }
+      showStep(currentStep);
+    }
+
+    updateProgress();
+  </script>
+</body>
+</html>
