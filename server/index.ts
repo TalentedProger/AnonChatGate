@@ -171,6 +171,21 @@ const corsOptions = {
       return callback(null, true);
     }
     
+    // Allow Render.com URLs (production hosting)
+    if (origin.includes('.onrender.com')) {
+      return callback(null, true);
+    }
+    
+    // Allow Railway URLs (production hosting)
+    if (origin.includes('.railway.app') || origin.includes('.up.railway.app')) {
+      return callback(null, true);
+    }
+    
+    // Allow Replit URLs
+    if (origin.includes('.replit.app') || origin.includes('.repl.co')) {
+      return callback(null, true);
+    }
+    
     if (allowedOrigins.includes(origin)) {
       return callback(null, true);
     }

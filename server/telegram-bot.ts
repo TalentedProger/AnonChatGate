@@ -110,7 +110,7 @@ async function setChatMenuButton() {
     await bot.setChatMenuButton({
       menu_button: {
         type: 'web_app',
-        text: '🚀 Открыть',
+        text: 'Start',
         web_app: { url: WEBAPP_URL }
       }
     });
