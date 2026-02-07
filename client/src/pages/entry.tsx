@@ -1,13 +1,28 @@
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { logger } from "@/lib/logger";
+import entryLogo from "@/assets/entry_logo.png";
 
 export default function EntryPage() {
   const [, setLocation] = useLocation();
   const auth = useAuth();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  
+  // Slider state
+  const [sliderPosition, setSliderPosition] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  const sliderRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Calculate max position (container width - slider width - padding)
+  const getMaxPosition = useCallback(() => {
+    if (!containerRef.current || !sliderRef.current) return 240;
+    const containerWidth = containerRef.current.offsetWidth;
+    const sliderWidth = sliderRef.current.offsetWidth;
+    return containerWidth - sliderWidth - 10; // 5px padding each side
+  }, []);
 
   // Check if user is already authenticated on mount
   useEffect(() => {
@@ -141,8 +156,8 @@ export default function EntryPage() {
         }
       }
 
-      // Try Telegram auth if available
-      if (tg?.initData) {
+      // Try Telegram auth if available and has valid initData
+      if (tg?.initData && tg.initData.length > 0) {
         logger.log('[Entry] Authenticating with Telegram...');
         const response = await fetch('/api/auth', {
           method: 'POST',
@@ -155,7 +170,6 @@ export default function EntryPage() {
           auth.setAuthData(authData);
           logger.log('[Entry] Telegram auth successful');
           
-          // Check profile completion
           const profileResponse = await fetch('/api/profile', {
             headers: { 'Authorization': `Bearer ${authData.token}` }
           });
@@ -175,27 +189,19 @@ export default function EntryPage() {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
           logger.error('[Entry] Telegram auth failed:', response.status, errorData);
           
-          // If initData is invalid/expired, show message
-          if (response.status === 401 && errorData.error === 'Invalid initData') {
-            // Try dev auth if in development
-            if (import.meta.env.DEV) {
-              logger.log('[Entry] initData expired, falling back to dev auth');
-            } else {
-              alert('Сессия Telegram истекла. Пожалуйста, перезапустите приложение.');
-              setIsAuthenticating(false);
-              return;
-            }
-          } else {
-            alert(`Ошибка авторизации: ${errorData.error || response.status}`);
+          // If in production and initData is invalid, show error
+          if (!import.meta.env.DEV) {
+            alert('Пожалуйста, откройте приложение через Telegram бота @AguGram_Bot');
             setIsAuthenticating(false);
             return;
           }
+          // In dev mode, fall through to dev auth
         }
       }
       
-      // Dev authentication for development mode
-      if (import.meta.env.DEV) {
-        logger.log('[Entry] Using dev authentication');
+      // Dev authentication for development mode OR when opened outside Telegram
+      if (import.meta.env.DEV || !tg?.initData) {
+        logger.log('[Entry] Using dev authentication (no valid Telegram context)');
         
         let devUserId = localStorage.getItem('dev_user_id');
         if (!devUserId) {
@@ -234,13 +240,11 @@ export default function EntryPage() {
           return;
         } else {
           logger.error('[Entry] Dev auth failed');
+          // In production without Telegram, show message
+          if (!import.meta.env.DEV) {
+            alert('Пожалуйста, откройте приложение через Telegram бота @AguGram_Bot');
+          }
         }
-      }
-      
-      // No authentication method available
-      if (!tg?.initData && !import.meta.env.DEV) {
-        logger.error('[Entry] No authentication method available');
-        alert('Пожалуйста, откройте приложение через Telegram');
       }
       
       setIsAuthenticating(false);
@@ -250,6 +254,65 @@ export default function EntryPage() {
       setIsAuthenticating(false);
     }
   };
+
+  // Slider drag handlers
+  const handleDragStart = (e: React.MouseEvent | React.TouchEvent) => {
+    if (isAuthenticating) return;
+    e.preventDefault();
+    setIsDragging(true);
+  };
+
+  const handleDragMove = useCallback((clientX: number) => {
+    if (!isDragging || !containerRef.current) return;
+    
+    const containerRect = containerRef.current.getBoundingClientRect();
+    const newPosition = clientX - containerRect.left - 30; // 30 is half slider width
+    const maxPos = getMaxPosition();
+    
+    setSliderPosition(Math.max(0, Math.min(newPosition, maxPos)));
+  }, [isDragging, getMaxPosition]);
+
+  const handleDragEnd = useCallback(() => {
+    if (!isDragging) return;
+    setIsDragging(false);
+    
+    const maxPos = getMaxPosition();
+    const threshold = maxPos * 0.85; // 85% to trigger
+    
+    if (sliderPosition >= threshold) {
+      // Triggered! Animate to end and start auth
+      setSliderPosition(maxPos);
+      handleStart();
+    } else {
+      // Snap back to start
+      setSliderPosition(0);
+    }
+  }, [isDragging, sliderPosition, getMaxPosition]);
+
+  // Mouse events
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => handleDragMove(e.clientX);
+    const handleMouseUp = () => handleDragEnd();
+    
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove);
+      window.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isDragging, handleDragMove, handleDragEnd]);
+
+  // Touch events
+  const handleTouchMove = (e: React.TouchEvent) => {
+    if (e.touches.length > 0) {
+      handleDragMove(e.touches[0].clientX);
+    }
+  };
+
+  const handleTouchEnd = () => handleDragEnd();
 
   // Show loading while checking existing auth
   if (isCheckingAuth) {
@@ -264,78 +327,126 @@ export default function EntryPage() {
     );
   }
 
+  const progress = sliderPosition / (getMaxPosition() || 1);
+
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex items-center justify-center px-5 py-8">
-      <div className="w-full max-w-[428px] h-[926px] rounded-3xl flex flex-col items-center justify-between px-7 py-12 box-border">
+    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex items-center justify-center px-4 py-4">
+      <div className="w-full max-w-[400px] flex flex-col items-center justify-between min-h-[90vh]">
         {/* Top area with logo and headings */}
-        <div className="w-full flex flex-col items-center mt-3">
-          <div className="w-60 h-60 flex items-center justify-center mb-0">
-            <svg width="240" height="240" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <defs>
-                <linearGradient id="logoGradient" x1="0" x2="1">
-                  <stop offset="0" stopColor="#C42DFF"/>
-                  <stop offset="1" stopColor="#4A90FF"/>
-                </linearGradient>
-              </defs>
-              <rect width="120" height="120" rx="20" fill="url(#logoGradient)" opacity="0.12" />
-              <text x="50%" y="55%" dominantBaseline="middle" textAnchor="middle" style={{ fontFamily: 'Raleway', fontWeight: 800, fill: '#58A0FF' }} fontSize="56">A</text>
-            </svg>
+        <div className="w-full flex flex-col items-center pt-4">
+          {/* Logo image */}
+          <div className="w-36 h-36 flex items-center justify-center mb-4">
+            <img 
+              src={entryLogo} 
+              alt="AguGram Logo" 
+              className="w-full h-full object-contain rounded-2xl"
+            />
           </div>
 
-          <h1 className="text-[44px] leading-[1.05] text-[#5800EF] text-center font-extrabold mb-0" style={{ fontFamily: 'Raleway' }}>
-            AguGram - первая соцсеть для студентов
+          <h1 
+            className="text-3xl leading-tight text-[#5800EF] text-center font-extrabold mb-2" 
+            style={{ fontFamily: 'Raleway' }}
+          >
+            AguGram
           </h1>
-          <h2 className="text-2xl text-white text-center font-semibold mt-11" style={{ fontFamily: 'Raleway' }}>
-            Сообщество, где быть внутри — уже привилегия
+          <h2 
+            className="text-lg text-white/80 text-center font-medium px-4" 
+            style={{ fontFamily: 'Raleway' }}
+          >
+            Первая соцсеть для студентов
           </h2>
+          <p 
+            className="text-base text-white/50 text-center mt-4 px-6" 
+            style={{ fontFamily: 'Raleway' }}
+          >
+            Сообщество, где быть внутри — уже привилегия
+          </p>
         </div>
 
-        {/* Bottom area with button and created-by */}
-        <div className="w-full flex flex-col items-center mb-1.5">
-          <button 
-            onClick={handleStart}
-            disabled={isAuthenticating}
-            className="w-full max-w-[360px] h-20 bg-transparent border border-transparent rounded-[35px] relative flex items-center overflow-hidden disabled:opacity-50 disabled:cursor-not-allowed transition-transform hover:scale-[1.02] active:scale-[0.98]"
-            style={{ backgroundClip: 'padding-box' }}
+        {/* Bottom area with slider button and created-by */}
+        <div className="w-full flex flex-col items-center pb-6">
+          {/* Swipe to unlock button */}
+          <div 
+            ref={containerRef}
+            className="w-full max-w-[320px] h-16 relative rounded-full overflow-hidden"
+            style={{
+              background: 'linear-gradient(90deg, rgba(196,45,255,0.1) 0%, rgba(74,144,255,0.1) 100%)',
+            }}
           >
-            {/* Gradient border */}
-            <div className="absolute inset-0 rounded-[35px] p-[1px] bg-gradient-to-r from-[#C42DFF] to-[#4A90FF]">
-              <div className="w-full h-full bg-black rounded-[34px]"></div>
-            </div>
-
-            {/* Button content */}
-            <div className="relative z-10 w-full h-full flex items-center">
-              {/* Icon circle */}
-              <div className="w-[70px] h-[70px] flex items-center justify-start pl-[5px] py-[5px]">
-                <div className="w-[60px] h-[60px] rounded-full bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] flex items-center justify-center flex-shrink-0">
-                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M12 2C17.5228 2 22 6.47715 22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2Z" fill="white" opacity="0.06"/>
-                    <path d="M9 12L11.5 14.5L11.5 9.5L9 12Z" fill="white"/>
-                  </svg>
+            {/* Gradient border effect */}
+            <div 
+              className="absolute inset-0 rounded-full p-[1px]" 
+              style={{ 
+                background: 'linear-gradient(90deg, #C42DFF 0%, #4A90FF 100%)',
+                WebkitMask: 'linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0)',
+                WebkitMaskComposite: 'xor',
+                maskComposite: 'exclude',
+              }}
+            />
+            
+            {/* Progress fill */}
+            <div 
+              className="absolute inset-0 rounded-full transition-opacity"
+              style={{
+                background: 'linear-gradient(90deg, rgba(196,45,255,0.3) 0%, rgba(74,144,255,0.3) 100%)',
+                opacity: progress,
+                width: `${Math.max(sliderPosition + 60, 60)}px`,
+              }}
+            />
+            
+            {/* Text label */}
+            <div 
+              className="absolute inset-0 flex items-center justify-center pointer-events-none"
+              style={{ 
+                opacity: 1 - progress * 0.5,
+                fontFamily: 'Raleway' 
+              }}
+            >
+              <span className="text-white/70 text-base font-medium ml-8">
+                {isAuthenticating ? 'Загрузка...' : 'Slide to Start'}
+              </span>
+              {/* Arrows */}
+              {!isAuthenticating && (
+                <div className="flex gap-1 ml-4">
+                  {[0.3, 0.5, 0.7].map((opacity, i) => (
+                    <svg key={i} className="w-4 h-4" viewBox="0 0 24 24" style={{ opacity }}>
+                      <path d="M9 6l6 6-6 6" fill="none" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
+                  ))}
                 </div>
-              </div>
-
-              {/* Button text */}
-              <div className="ml-[66px] text-xl font-semibold text-white" style={{ fontFamily: 'Raleway' }}>
-                {isAuthenticating ? 'Загрузка...' : 'Start'}
-              </div>
-
-              {/* Arrow icons */}
-              <div className="ml-12 flex gap-1.5 items-center">
-                {[...Array(3)].map((_, i) => (
-                  <svg key={i} className="w-[15px] h-[15px]" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                    <path d="M8 5l7 7-7 7" fill="none" stroke="#FFFFFF" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
-                  </svg>
-                ))}
-              </div>
+              )}
             </div>
-          </button>
+            
+            {/* Draggable slider circle */}
+            <div
+              ref={sliderRef}
+              className="absolute top-1/2 -translate-y-1/2 w-14 h-14 rounded-full cursor-grab active:cursor-grabbing z-10 flex items-center justify-center shadow-lg"
+              style={{
+                left: `${sliderPosition + 4}px`,
+                background: 'linear-gradient(135deg, #C42DFF 0%, #4A90FF 100%)',
+                transition: isDragging ? 'none' : 'left 0.3s ease-out',
+                touchAction: 'none',
+              }}
+              onMouseDown={handleDragStart}
+              onTouchStart={handleDragStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
+            >
+              {isAuthenticating ? (
+                <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+              ) : (
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                  <path d="M9 6l6 6-6 6" stroke="white" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                </svg>
+              )}
+            </div>
+          </div>
 
-          <div className="h-7"></div>
+          <div className="h-6" />
 
-          <div className="flex items-center gap-4 text-lg" style={{ fontFamily: 'Raleway' }}>
-            <div className="text-white/30">Created by</div>
-            <div className="text-white font-bold blur-[4px] opacity-90">secret</div>
+          <div className="flex items-center gap-3 text-sm" style={{ fontFamily: 'Raleway' }}>
+            <span className="text-white/30">Created by</span>
+            <span className="text-white font-bold blur-[3px] opacity-80">secret</span>
           </div>
         </div>
       </div>
