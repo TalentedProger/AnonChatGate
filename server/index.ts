@@ -141,64 +141,29 @@ logger.info('✅ Environment validation passed\n');
 
 const app = express();
 
-// CORS configuration
-const corsOptions = {
+// CORS configuration - ONLY for API routes, not for static files
+const corsOptions: cors.CorsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
-    // Allow requests with no origin (mobile apps, Postman, etc.)
+    // Allow requests with no origin (mobile apps, Postman, server-to-server, etc.)
     if (!origin) {
       return callback(null, true);
     }
     
-    // Allowed origins
-    const allowedOrigins = [
-      process.env.WEBAPP_URL,
-      'https://web.telegram.org',
-      'https://t.me',
-    ].filter(Boolean);
-    
-    // In development, allow localhost
-    if (process.env.NODE_ENV === 'development') {
-      allowedOrigins.push('http://localhost:3000', 'http://localhost:5173', 'http://127.0.0.1:3000');
-    }
-    
-    // Allow ngrok URLs
-    if (origin.includes('.ngrok-free.dev') || origin.includes('.ngrok.io')) {
-      return callback(null, true);
-    }
-    
-    // Allow Cloudflare Tunnel URLs
-    if (origin.includes('.trycloudflare.com')) {
-      return callback(null, true);
-    }
-    
-    // Allow Render.com URLs (production hosting)
-    if (origin.includes('.onrender.com')) {
-      return callback(null, true);
-    }
-    
-    // Allow Railway URLs (production hosting)
-    if (origin.includes('.railway.app') || origin.includes('.up.railway.app')) {
-      return callback(null, true);
-    }
-    
-    // Allow Replit URLs
-    if (origin.includes('.replit.app') || origin.includes('.repl.co')) {
-      return callback(null, true);
-    }
-    
-    if (allowedOrigins.includes(origin)) {
-      return callback(null, true);
-    }
-    
-    logger.warn(`CORS blocked request from origin: ${origin}`);
-    callback(new Error('Not allowed by CORS'));
+    // ALLOW ALL for now to debug - we'll tighten this later
+    // The app is loaded inside Telegram WebView which may have various origins
+    return callback(null, true);
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data'],
 };
 
-app.use(cors(corsOptions));
+// Apply CORS only to API routes, not static files
+app.use('/api', cors(corsOptions));
+
+// Also handle preflight for API
+app.options('/api/*', cors(corsOptions));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: false }));
 
@@ -304,9 +269,7 @@ app.use((req, res, next) => {
     throw err;
   });
 
-  // importantly only setup vite in development and after
-  // setting up all the other routes so the catch-all route
-  // doesn't interfere with the other routes
+  // Setup static file serving / Vite
   if (app.get("env") === "development") {
     await setupVite(app, server);
   } else {
@@ -314,13 +277,9 @@ app.use((req, res, next) => {
   }
 
   // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
   const port = parseInt(process.env.PORT || '5000', 10);
   const host = "0.0.0.0";
   
-  // Note: reusePort is not supported on Windows
   server.listen(port, host, () => {
     logger.info({ port, host }, `Server started on port ${port}`);
     log(`serving on port ${port}`);
