@@ -35,10 +35,19 @@ export default function ChatInterface({
   const [, setLocation] = useLocation();
   const [messageText, setMessageText] = useState('');
   const [menuOpen, setMenuOpen] = useState(false);
-  const [useBackgroundImage, setUseBackgroundImage] = useState(false);
+  // Load chat background preference from localStorage
+  const [useBackgroundImage, setUseBackgroundImage] = useState(() => {
+    const saved = localStorage.getItem('chatBackgroundImage');
+    return saved === 'true';
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Save background preference to localStorage when it changes
+  useEffect(() => {
+    localStorage.setItem('chatBackgroundImage', String(useBackgroundImage));
+  }, [useBackgroundImage]);
 
   // Navigate to user profile
   const handleUserClick = (userId: number) => {

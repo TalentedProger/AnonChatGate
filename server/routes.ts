@@ -1026,5 +1026,118 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // ============================================================================
+  // NOTIFICATIONS / FRIEND REQUESTS ROUTES
+  // ============================================================================
+
+  // Get pending friend requests (notifications)
+  app.get('/api/notifications', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      const pendingRequests = await storage.getPendingRequestsForUser(userId);
+      
+      // Get current date info for frontend
+      const now = new Date();
+      const currentDay = now.getDate();
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      
+      // Calculate days until next month (when requests are sent)
+      const lastDayOfMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
+      const daysUntilMonthEnd = lastDayOfMonth - currentDay;
+      
+      // Requests are sent on the 1st of each month
+      const daysUntilUpdate = daysUntilMonthEnd + 1;
+      
+      res.json({
+        notifications: pendingRequests.map(req => ({
+          id: req.id,
+          fromUserId: req.fromUserId,
+          fromUser: {
+            id: req.fromUser.id,
+            anonName: req.fromUser.anonName,
+            gender: req.fromUser.gender,
+            course: req.fromUser.course,
+            direction: req.fromUser.direction,
+          },
+          status: req.status,
+          monthKey: req.monthKey,
+          createdAt: req.createdAt,
+        })),
+        daysUntilUpdate,
+        currentDate: now.toISOString(),
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        logError(error, { context: 'get_notifications', userId: req.user?.userId });
+      }
+      res.status(500).json({ error: 'Failed to get notifications' });
+    }
+  });
+
+  // Respond to a friend request (accept/reject)
+  app.post('/api/notifications/:requestId/respond', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      const requestId = parseInt(req.params.requestId, 10);
+      const { action } = req.body; // 'accept' or 'reject'
+      
+      if (isNaN(requestId)) {
+        return res.status(400).json({ error: 'Invalid request ID' });
+      }
+      
+      if (!action || !['accept', 'reject'].includes(action)) {
+        return res.status(400).json({ error: 'Invalid action. Use "accept" or "reject"' });
+      }
+      
+      const status = action === 'accept' ? 'accepted' : 'rejected';
+      const updatedRequest = await storage.updateFriendRequestStatus(requestId, status);
+      
+      if (!updatedRequest) {
+        return res.status(404).json({ error: 'Request not found' });
+      }
+      
+      res.json({
+        success: true,
+        message: action === 'accept' 
+          ? 'Заявка принята! Пользователь теперь может видеть ваш публичный профиль.' 
+          : 'Заявка отклонена.',
+        request: updatedRequest,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        logError(error, { context: 'respond_notification', userId: req.user?.userId });
+      }
+      res.status(500).json({ error: 'Failed to respond to notification' });
+    }
+  });
+
+  // Get user's popularity (how many times they've been favorited this month)
+  app.get('/api/popularity/:userId?', requireAuth, async (req: any, res) => {
+    try {
+      const targetUserId = req.params.userId ? parseInt(req.params.userId, 10) : req.user.userId;
+      
+      if (isNaN(targetUserId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+      
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      const popularity = await storage.getUserPopularity(targetUserId, currentMonthKey);
+      
+      res.json({
+        userId: targetUserId,
+        popularity,
+        monthKey: currentMonthKey,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        logError(error, { context: 'get_popularity', userId: req.user?.userId });
+      }
+      res.status(500).json({ error: 'Failed to get popularity' });
+    }
+  });
+
   return httpServer;
 }

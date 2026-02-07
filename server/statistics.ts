@@ -1,9 +1,15 @@
 import { Request, Response } from 'express';
 import { db } from './db';
-import { users, profileViews, friendRequests, messages, rooms, news } from '@shared/schema';
+import { users, profileViews, friendRequests, messages, rooms, news, favorites } from '@shared/schema';
 import { eq, desc, sql, and, ne } from 'drizzle-orm';
 import { getOnlineUsersCount } from './websocket';
 import { logger } from './logger';
+
+// Helper to get current month key
+function getCurrentMonthKey(): string {
+  const now = new Date();
+  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+}
 
 // Extend Express Request type to include user
 interface AuthRequest extends Request {
@@ -13,7 +19,7 @@ interface AuthRequest extends Request {
   };
 }
 
-// Get user statistics (popularity, friend requests count)
+// Get user statistics (popularity based on favorites count, friend requests count)
 export async function getUserStatistics(req: AuthRequest, res: Response) {
   try {
     const userId = req.user?.id;
@@ -22,11 +28,16 @@ export async function getUserStatistics(req: AuthRequest, res: Response) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Count unique profile views (popularity)
+    const currentMonthKey = getCurrentMonthKey();
+
+    // Count how many times this user is in someone's favorites this month (POPULARITY)
     const popularityResult = await db
-      .select({ count: sql<number>`count(distinct viewer_user_id)` })
-      .from(profileViews)
-      .where(eq(profileViews.profileUserId, userId));
+      .select({ count: sql<number>`count(*)` })
+      .from(favorites)
+      .where(and(
+        eq(favorites.favoriteUserId, userId),
+        eq(favorites.monthKey, currentMonthKey)
+      ));
     
     const popularity = popularityResult[0]?.count || 0;
 
@@ -135,26 +146,33 @@ export async function getLastMessage(req: Request, res: Response) {
   }
 }
 
-// Get top popular users
+// Get top popular users (based on favorites count this month)
 export async function getTopPopularUsers(req: Request, res: Response) {
   try {
     const limit = parseInt(req.query.limit as string) || 10;
+    const currentMonthKey = getCurrentMonthKey();
 
-    // Get users with their view counts, ordered by popularity
+    // Get users with their favorites count this month, ordered by popularity
     const topUsers = await db
       .select({
         userId: users.id,
         anonName: users.anonName,
-        popularity: sql<number>`count(distinct ${profileViews.viewerUserId})`,
+        popularity: sql<number>`count(${favorites.id})`,
       })
       .from(users)
-      .leftJoin(profileViews, eq(users.id, profileViews.profileUserId))
+      .leftJoin(favorites, and(
+        eq(users.id, favorites.favoriteUserId),
+        eq(favorites.monthKey, currentMonthKey)
+      ))
       .where(eq(users.status, 'approved'))
       .groupBy(users.id, users.anonName)
-      .orderBy(desc(sql`count(distinct ${profileViews.viewerUserId})`))
+      .orderBy(desc(sql`count(${favorites.id})`))
       .limit(limit);
 
-    return res.json({ topUsers });
+    return res.json({ 
+      topUsers,
+      monthKey: currentMonthKey 
+    });
   } catch (error) {
     logger.error({ error }, '[Statistics] Error getting top users');
     return res.status(500).json({ error: 'Failed to get top users' });

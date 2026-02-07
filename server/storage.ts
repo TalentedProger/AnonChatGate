@@ -1,6 +1,6 @@
-import { users, messages, rooms, favorites, type User, type InsertUser, type InsertProfile, type Message, type InsertMessage, type Room, type InsertRoom, type Favorite, type InsertFavorite } from "@shared/schema";
+import { users, messages, rooms, favorites, friendRequests, type User, type InsertUser, type InsertProfile, type Message, type InsertMessage, type Room, type InsertRoom, type Favorite, type InsertFavorite, type FriendRequest, type InsertFriendRequest } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, lt, gt, and, sql } from "drizzle-orm";
+import { eq, desc, lt, gt, and, sql, ne } from "drizzle-orm";
 import { MESSAGE } from "./config";
 
 export interface PaginatedMessages {
@@ -39,6 +39,16 @@ export interface IStorage {
   addFavorite(favorite: InsertFavorite): Promise<Favorite>;
   removeFavorite(userId: number, favoriteUserId: number): Promise<void>;
   isFavorite(userId: number, favoriteUserId: number): Promise<boolean>;
+  
+  // Popularity - count how many times a user is in someone's favorites (current month)
+  getUserPopularity(userId: number, monthKey: string): Promise<number>;
+  
+  // Friend requests operations (notifications system)
+  getPendingRequestsForUser(userId: number): Promise<(FriendRequest & { fromUser: User })[]>;
+  getFriendRequestByMonth(fromUserId: number, toUserId: number, monthKey: string): Promise<FriendRequest | undefined>;
+  createFriendRequest(request: InsertFriendRequest): Promise<FriendRequest>;
+  updateFriendRequestStatus(requestId: number, status: 'accepted' | 'rejected'): Promise<FriendRequest | undefined>;
+  getAcceptedRequestsForUser(userId: number): Promise<(FriendRequest & { fromUser: User })[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -284,6 +294,85 @@ export class DatabaseStorage implements IStorage {
         eq(favorites.favoriteUserId, favoriteUserId)
       ));
     return !!favorite;
+  }
+
+  // Get popularity - count how many times a user is favorited in current month
+  async getUserPopularity(userId: number, monthKey: string): Promise<number> {
+    const result = await db
+      .select({ count: sql<number>`count(*)` })
+      .from(favorites)
+      .where(and(
+        eq(favorites.favoriteUserId, userId),
+        eq(favorites.monthKey, monthKey)
+      ));
+    return Number(result[0]?.count || 0);
+  }
+
+  // Friend requests operations
+  async getPendingRequestsForUser(userId: number): Promise<(FriendRequest & { fromUser: User })[]> {
+    const result = await db
+      .select()
+      .from(friendRequests)
+      .innerJoin(users, eq(friendRequests.fromUserId, users.id))
+      .where(and(
+        eq(friendRequests.toUserId, userId),
+        eq(friendRequests.status, 'pending')
+      ))
+      .orderBy(desc(friendRequests.createdAt));
+    
+    return result.map(row => ({
+      ...row.friend_requests,
+      fromUser: row.users
+    }));
+  }
+
+  async getFriendRequestByMonth(fromUserId: number, toUserId: number, monthKey: string): Promise<FriendRequest | undefined> {
+    const [request] = await db
+      .select()
+      .from(friendRequests)
+      .where(and(
+        eq(friendRequests.fromUserId, fromUserId),
+        eq(friendRequests.toUserId, toUserId),
+        eq(friendRequests.monthKey, monthKey)
+      ));
+    return request || undefined;
+  }
+
+  async createFriendRequest(request: InsertFriendRequest): Promise<FriendRequest> {
+    const [friendRequest] = await db
+      .insert(friendRequests)
+      .values(request)
+      .returning();
+    return friendRequest;
+  }
+
+  async updateFriendRequestStatus(requestId: number, status: 'accepted' | 'rejected'): Promise<FriendRequest | undefined> {
+    const [request] = await db
+      .update(friendRequests)
+      .set({ 
+        status, 
+        respondedAt: new Date() 
+      })
+      .where(eq(friendRequests.id, requestId))
+      .returning();
+    return request || undefined;
+  }
+
+  async getAcceptedRequestsForUser(userId: number): Promise<(FriendRequest & { fromUser: User })[]> {
+    const result = await db
+      .select()
+      .from(friendRequests)
+      .innerJoin(users, eq(friendRequests.fromUserId, users.id))
+      .where(and(
+        eq(friendRequests.toUserId, userId),
+        eq(friendRequests.status, 'accepted')
+      ))
+      .orderBy(desc(friendRequests.respondedAt));
+    
+    return result.map(row => ({
+      ...row.friend_requests,
+      fromUser: row.users
+    }));
   }
 }
 

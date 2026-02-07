@@ -1,7 +1,8 @@
 import { useAuth } from '@/lib/auth';
 import { motion } from 'framer-motion';
-import { Zap, Shield, MessageSquare, Users, Rocket, Lock, TrendingUp, Newspaper, ChevronLeft, ChevronRight, Heart, X, Star } from 'lucide-react';
+import { Zap, Shield, MessageSquare, Users, Rocket, Lock, TrendingUp, Newspaper, ChevronLeft, ChevronRight, Heart, X, Star, Bell, Calendar } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
+import { useLocation } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { Swiper, SwiperSlide } from 'swiper/react';
 import { Autoplay } from 'swiper/modules';
@@ -36,11 +37,29 @@ interface FavoriteUser {
   monthKey: string;
 }
 
+interface Notification {
+  id: number;
+  fromUserId: number;
+  fromUser: {
+    id: number;
+    anonName: string;
+    gender: string | null;
+    course: string | null;
+    direction: string | null;
+  };
+  status: string;
+  monthKey: string;
+  createdAt: string;
+}
+
 export default function HomePage() {
   const auth = useAuth();
+  const [, setLocation] = useLocation();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [topUsers, setTopUsers] = useState<TopUser[]>([]);
   const [favorites, setFavorites] = useState<FavoriteUser[]>([]);
+  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [daysUntilUpdate, setDaysUntilUpdate] = useState(0);
   const [canAddFavorite, setCanAddFavorite] = useState(true);
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -69,6 +88,14 @@ export default function HomePage() {
           setFavorites(favoritesData.favorites || []);
           setCanAddFavorite(favoritesData.canAddThisMonth);
         }
+
+        // Load notifications
+        const notificationsResponse = await apiRequest('GET', '/api/notifications');
+        if (notificationsResponse.ok) {
+          const notificationsData = await notificationsResponse.json();
+          setNotifications(notificationsData.notifications || []);
+          setDaysUntilUpdate(notificationsData.daysUntilUpdate || 0);
+        }
       } catch (error) {
         console.error('Failed to load home data:', error);
       } finally {
@@ -87,7 +114,8 @@ export default function HomePage() {
     setCurrentNewsIndex((prev) => (prev - 1 + news.length) % news.length);
   };
 
-  const removeFavorite = async (favoriteUserId: number) => {
+  const removeFavorite = async (favoriteUserId: number, e: React.MouseEvent) => {
+    e.stopPropagation(); // Prevent navigation when clicking remove
     try {
       const response = await apiRequest('DELETE', `/api/favorites/${favoriteUserId}`);
       if (response.ok) {
@@ -96,6 +124,29 @@ export default function HomePage() {
     } catch (error) {
       console.error('Failed to remove favorite:', error);
     }
+  };
+
+  const navigateToUser = (userId: number) => {
+    setLocation(`/user/${userId}`);
+  };
+
+  const handleNotificationResponse = async (requestId: number, action: 'accept' | 'reject') => {
+    try {
+      const response = await apiRequest('POST', `/api/notifications/${requestId}/respond`, { action });
+      if (response.ok) {
+        setNotifications(prev => prev.filter(n => n.id !== requestId));
+      }
+    } catch (error) {
+      console.error('Failed to respond to notification:', error);
+    }
+  };
+
+  // Format date in Russian
+  const formatDate = () => {
+    const now = new Date();
+    const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 
+                    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+    return `${now.getDate()} ${months[now.getMonth()]}`;
   };
 
   return (
@@ -208,6 +259,100 @@ export default function HomePage() {
           </motion.div>
         </div>
 
+        {/* Notifications Section */}
+        <div className="w-full max-w-[95vw] min-h-card mt-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.65 }}
+            className="bg-zinc-900 rounded-xl p-5 border border-zinc-700"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Bell className="w-6 h-6 text-violet-400" />
+                <h3 className="text-xl font-semibold text-white">Уведомления</h3>
+              </div>
+              {notifications.length > 0 && (
+                <span className="text-xs text-violet-400 bg-violet-400/10 px-2 py-1 rounded-full">
+                  {notifications.length} новых
+                </span>
+              )}
+            </div>
+
+            {/* Date info */}
+            <div className="flex items-center gap-4 mb-4 text-sm">
+              <div className="flex items-center gap-2 text-gray-400">
+                <Calendar className="w-4 h-4" />
+                <span>Сегодня: <span className="text-white">{formatDate()}</span></span>
+              </div>
+              <div className="text-gray-400">
+                До обновления: <span className="text-violet-400 font-semibold">{daysUntilUpdate} дней</span>
+              </div>
+            </div>
+
+            {loading ? (
+              <div className="space-y-2">
+                <div className="skeleton rounded-lg h-16"></div>
+                <div className="skeleton rounded-lg h-16"></div>
+              </div>
+            ) : notifications.length === 0 ? (
+              <div className="text-center py-6">
+                <Bell className="w-10 h-10 text-zinc-600 mx-auto mb-3" />
+                <p className="text-gray-400">Нет новых уведомлений</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  Заявки от пользователей, которые добавили вас в избранное, появятся 1-го числа следующего месяца
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {notifications.map((notification) => (
+                  <div
+                    key={notification.id}
+                    className="bg-zinc-800 rounded-lg p-4 border border-zinc-700"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div 
+                        onClick={() => navigateToUser(notification.fromUserId)}
+                        className="w-12 h-12 rounded-full bg-gradient-to-br from-violet-500 to-pink-500 flex items-center justify-center text-white font-bold cursor-pointer hover:opacity-80 transition-opacity"
+                      >
+                        {notification.fromUser.anonName?.charAt(notification.fromUser.anonName.length - 1) || '?'}
+                      </div>
+                      <div className="flex-1">
+                        <p className="text-white font-medium">
+                          <span 
+                            onClick={() => navigateToUser(notification.fromUserId)}
+                            className="cursor-pointer hover:text-violet-400 transition-colors"
+                          >
+                            {notification.fromUser.anonName}
+                          </span>
+                          {' '}выбрал(а) вас
+                        </p>
+                        <p className="text-sm text-gray-400 mt-1">
+                          Вы можете принять или отклонить заявку. При принятии пользователь сможет увидеть ваш публичный профиль.
+                        </p>
+                        <div className="flex gap-2 mt-3">
+                          <button
+                            onClick={() => handleNotificationResponse(notification.id, 'accept')}
+                            className="px-4 py-2 bg-green-500 hover:bg-green-600 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            ✓ Принять
+                          </button>
+                          <button
+                            onClick={() => handleNotificationResponse(notification.id, 'reject')}
+                            className="px-4 py-2 bg-zinc-700 hover:bg-zinc-600 text-white text-sm font-medium rounded-lg transition-colors"
+                          >
+                            ✕ Отклонить
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </div>
+
         {/* News Section */}
         {(news.length > 0 || loading) && (
           <div className="w-full max-w-[95vw] min-h-card mt-4">
@@ -316,7 +461,8 @@ export default function HomePage() {
                 {favorites.map((favorite) => (
                   <div
                     key={favorite.id}
-                    className="flex items-center justify-between bg-zinc-800 rounded-lg p-3 hover:bg-zinc-700 transition-colors"
+                    onClick={() => navigateToUser(favorite.favoriteUserId)}
+                    className="flex items-center justify-between bg-zinc-800 rounded-lg p-3 hover:bg-zinc-700 transition-colors cursor-pointer"
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-violet-500 flex items-center justify-center text-white font-bold">
@@ -333,7 +479,7 @@ export default function HomePage() {
                       </div>
                     </div>
                     <button
-                      onClick={() => removeFavorite(favorite.favoriteUserId)}
+                      onClick={(e) => removeFavorite(favorite.favoriteUserId, e)}
                       className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-500/20 transition-colors"
                       title="Удалить из избранного"
                     >
@@ -373,7 +519,8 @@ export default function HomePage() {
                   {topUsers.map((user, index) => (
                     <div
                       key={user.userId}
-                      className="flex items-center justify-between bg-zinc-800 rounded-lg p-3 hover:bg-zinc-700 transition-colors"
+                      onClick={() => navigateToUser(user.userId)}
+                      className="flex items-center justify-between bg-zinc-800 rounded-lg p-3 hover:bg-zinc-700 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${

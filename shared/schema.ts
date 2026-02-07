@@ -53,7 +53,9 @@ export const friendRequests = pgTable("friend_requests", {
   fromUserId: integer("from_user_id").references(() => users.id).notNull(),
   toUserId: integer("to_user_id").references(() => users.id).notNull(),
   status: text("status", { enum: ["pending", "accepted", "rejected"] }).notNull().default("pending"),
+  monthKey: text("month_key").notNull(), // Format: "2025-01" - requests are sent at month end
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  respondedAt: timestamp("responded_at"),
 });
 
 export const news = pgTable("news", {
@@ -141,6 +143,12 @@ export const insertFavoriteSchema = createInsertSchema(favorites).omit({
   createdAt: true,
 });
 
+export const insertFriendRequestSchema = createInsertSchema(friendRequests).omit({
+  id: true,
+  createdAt: true,
+  respondedAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type User = typeof users.$inferSelect;
@@ -149,4 +157,6 @@ export type Message = typeof messages.$inferSelect;
 export type InsertRoom = z.infer<typeof insertRoomSchema>;
 export type Room = typeof rooms.$inferSelect;
 export type Favorite = typeof favorites.$inferSelect;
+export type FriendRequest = typeof friendRequests.$inferSelect;
+export type InsertFriendRequest = z.infer<typeof insertFriendRequestSchema>;
 export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;

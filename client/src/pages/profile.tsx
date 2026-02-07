@@ -263,7 +263,7 @@ export default function ProfilePage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute right-0 mt-2 w-64 bg-gradient-to-br from-black/95 to-violet-900/30 border-2 border-violet-500/30 rounded-2xl shadow-[0_0_30px_rgba(139,92,246,0.3)] overflow-hidden backdrop-blur-md"
+                className="absolute right-0 mt-2 w-64 bg-zinc-900 border border-zinc-700 rounded-2xl shadow-lg overflow-hidden"
               >
                 <ul className="flex flex-col text-left">
                   <li 
@@ -494,7 +494,7 @@ export default function ProfilePage() {
 
       {/* Edit Profile Dialog */}
       <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
-        <DialogContent className="bg-gradient-to-br from-black/95 to-violet-900/30 backdrop-blur-md border-2 border-violet-500/30 text-white w-[90%] max-w-[500px] rounded-[25px]" hideClose>
+        <DialogContent className="bg-zinc-900 border border-zinc-700 text-white w-[90%] max-w-[500px] rounded-[25px]" hideClose>
           <button
             onClick={() => setEditProfileOpen(false)}
             className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-zinc-700 rounded-full transition-colors z-50"
@@ -576,7 +576,7 @@ export default function ProfilePage() {
 
       {/* Edit Link Dialog */}
       <Dialog open={editLinkOpen} onOpenChange={setEditLinkOpen}>
-        <DialogContent className="bg-gradient-to-br from-black/95 to-violet-900/30 backdrop-blur-md border-2 border-violet-500/30 text-white w-[90%] max-w-[500px] rounded-[25px]" hideClose>
+        <DialogContent className="bg-zinc-900 border border-zinc-700 text-white w-[90%] max-w-[500px] rounded-[25px]" hideClose>
           <button
             onClick={() => setEditLinkOpen(false)}
             className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-zinc-700 rounded-full transition-colors z-50"
@@ -627,7 +627,7 @@ export default function ProfilePage() {
 
       {/* Coming Soon Dialog */}
       <Dialog open={comingSoonOpen} onOpenChange={setComingSoonOpen}>
-        <DialogContent className="bg-gradient-to-br from-black/95 to-violet-900/30 backdrop-blur-md border-2 border-violet-500/30 text-white w-[90%] max-w-[400px] rounded-[25px]" hideClose>
+        <DialogContent className="bg-zinc-900 border border-zinc-700 text-white w-[90%] max-w-[400px] rounded-[25px]" hideClose>
           <button
             onClick={() => setComingSoonOpen(false)}
             className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-zinc-700 rounded-full transition-colors z-50"
@@ -635,7 +635,7 @@ export default function ProfilePage() {
             <X className="w-5 h-5 font-bold" strokeWidth={3} />
           </button>
           <div className="flex flex-col items-center text-center py-6">
-            <div className="w-20 h-20 bg-gradient-to-br from-violet-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mb-4 border-2 border-violet-500/30">
+            <div className="w-20 h-20 bg-zinc-800 rounded-full flex items-center justify-center mb-4 border border-zinc-700">
               <Camera className="w-10 h-10 text-violet-400" />
             </div>
             <DialogHeader>
@@ -675,7 +675,7 @@ function MetricCard({ icon, value, label, borderColor }: { icon: React.ReactNode
 
 function Section({ title, children, locked }: { title: string, children: React.ReactNode, locked?: boolean }) {
   return (
-    <div className="space-y-2 mt-2 bg-zinc-800/90 rounded-xl p-3 w-full shadow-md shadow-black/30">
+    <div className="space-y-2 mt-2 bg-zinc-900 rounded-xl p-3 w-full border border-zinc-700">
       <h2 className="font-semibold text-lg flex items-center justify-between">
         <span className="flex items-center gap-2">
           <span className="text-white">•</span>
@@ -696,9 +696,9 @@ function SocialButton({ icon, label, onClick, hasLink }: {
 }) {
   return (
     <motion.div
-      whileHover={{ boxShadow: "0 0 15px rgba(177, 0, 255, 0.6)", scale: 1.05 }}
+      whileHover={{ scale: 1.05 }}
       onClick={onClick}
-      className="relative flex flex-col items-center justify-center w-24 h-24 bg-zinc-800 rounded-xl transition-all cursor-pointer"
+      className="relative flex flex-col items-center justify-center w-24 h-24 bg-zinc-800 border border-zinc-700 rounded-xl transition-all cursor-pointer hover:border-violet-500"
       data-testid={`social-${label.toLowerCase()}`}
     >
       <div className="mb-2">{icon}</div>
