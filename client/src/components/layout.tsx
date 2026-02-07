@@ -49,11 +49,11 @@ export default function Layout({ children }: LayoutProps) {
   }, []);
 
   return (
-    <div className="h-screen bg-background font-sans flex flex-col">
-      {/* Spacer for Telegram header/navigation buttons */}
+    <div className="h-screen font-sans flex flex-col">
+      {/* Spacer for Telegram header/navigation buttons - transparent so page bg shows through */}
       {topPadding > 0 && (
         <div 
-          className="shrink-0 bg-background" 
+          className="shrink-0" 
           style={{ height: `${topPadding}px` }} 
         />
       )}

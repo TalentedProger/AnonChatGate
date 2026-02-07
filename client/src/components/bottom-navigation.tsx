@@ -27,7 +27,7 @@ export default function BottomNavigation() {
   const [location] = useLocation();
   
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+    <div className="fixed bottom-0 left-0 right-0 z-50">
       <div className="bg-[#0A0A12] border-t border-white/10">
         <div className="flex items-center justify-around h-16 px-4">
           {navigationItems.map((item) => {

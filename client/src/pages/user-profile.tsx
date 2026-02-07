@@ -5,6 +5,7 @@ import { useState, useEffect } from "react";
 import { useLocation, useRoute } from 'wouter';
 import { apiRequest } from '@/lib/queryClient';
 import { showBackButton } from '@/lib/telegram';
+import { useTelegramPadding } from '@/hooks/useTelegramPadding';
 import maleProfile from '@/assets/male_profile.jpg';
 import femaleProfile from '@/assets/female_profile.jpg';
 
@@ -52,6 +53,7 @@ export default function UserProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { topPadding } = useTelegramPadding();
 
   const userId = params?.userId;
 
@@ -145,9 +147,9 @@ export default function UserProfilePage() {
   }
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white p-6 flex flex-col items-center pb-20">
+    <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white p-6 flex flex-col items-center pb-20" style={{ paddingTop: topPadding > 0 ? `${topPadding + 24}px` : '24px' }}>
       {/* Back button */}
-      <div className="fixed top-6 left-6 z-50">
+      <div className="fixed z-50" style={{ top: topPadding > 0 ? `${topPadding + 24}px` : '24px', left: '24px' }}>
         <button 
           onClick={handleBack}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 transition-colors"
@@ -157,7 +159,7 @@ export default function UserProfilePage() {
       </div>
 
       {/* Favorite button */}
-      <div className="fixed top-6 right-6 z-50">
+      <div className="fixed z-50" style={{ top: topPadding > 0 ? `${topPadding + 24}px` : '24px', right: '24px' }}>
         <button 
           onClick={handleFavorite}
           className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md hover:bg-pink-500/30 transition-colors"

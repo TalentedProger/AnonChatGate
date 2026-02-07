@@ -65,13 +65,17 @@ try {
 }
 
 // Determine if polling should be enabled
-// In production, disable polling by default to avoid 409 conflicts
-// Use ENABLE_BOT_POLLING=true to explicitly enable it on one instance
+// In production, ALWAYS disable polling to avoid 409 conflicts
+// Use ENABLE_BOT_POLLING=true to explicitly enable it on ONE instance only
 const isProduction = process.env.NODE_ENV === 'production';
-const enablePolling = process.env.ENABLE_BOT_POLLING === 'true' || !isProduction;
+const enablePolling = process.env.ENABLE_BOT_POLLING === 'true';
+
+logger.info(`[Telegram Bot] Environment: NODE_ENV=${process.env.NODE_ENV}, isProduction=${isProduction}, ENABLE_BOT_POLLING=${process.env.ENABLE_BOT_POLLING}`);
 
 if (!enablePolling) {
-  logger.info('[Telegram Bot] Polling disabled in production (set ENABLE_BOT_POLLING=true to enable on ONE instance)');
+  logger.info('[Telegram Bot] Polling DISABLED (set ENABLE_BOT_POLLING=true to enable on ONE instance only)');
+} else {
+  logger.info('[Telegram Bot] Polling ENABLED - make sure only ONE instance has this enabled!');
 }
 
 // Create bot with conditional polling
