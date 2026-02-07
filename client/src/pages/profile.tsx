@@ -298,7 +298,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Animated profile switch */}
-      <div className="w-full max-w-3xl mt-20">
+      <div className="w-full max-w-3xl mt-10">
         <AnimatePresence mode="wait">
           {activeProfile === "main" ? (
             <motion.div
@@ -310,8 +310,7 @@ export default function ProfilePage() {
               className="flex flex-col items-center space-y-6"
             >
               <div 
-                className="relative w-32 h-32 rounded-full overflow-visible flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500 cursor-pointer hover:opacity-90 transition-opacity"
-                onClick={() => fileInputRef.current?.click()}
+                className="relative w-32 h-32 rounded-full overflow-visible flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500"
               >
                 <div className="absolute inset-0 rounded-full overflow-hidden">
                   {mainProfileAvatar ? (

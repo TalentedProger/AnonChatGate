@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, memo } from 'react';
-import { Send, ChevronLeft, Check, CheckCheck, Menu } from 'lucide-react';
+import { useState, useEffect, useRef, memo, useCallback } from 'react';
+import { Send, ChevronLeft, Check, CheckCheck, Menu, Reply, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import chatBackgroundGalaxy from '@/assets/chat_background_galaxy.jpg';
 import mainGroupInternal from '@/assets/main_group_internal.jpg';
@@ -40,9 +40,115 @@ export default function ChatInterface({
     const saved = localStorage.getItem('chatBackgroundImage');
     return saved === 'true';
   });
+  
+  // Cache participant counts to prevent flickering when WebSocket reconnects
+  const [cachedTotalUsers, setCachedTotalUsers] = useState(() => {
+    const saved = localStorage.getItem('chatCachedTotalUsers');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+  const [cachedOnlineCount, setCachedOnlineCount] = useState(() => {
+    const saved = localStorage.getItem('chatCachedOnlineCount');
+    return saved ? parseInt(saved, 10) : 0;
+  });
+  
+  // Update cached values only when we have valid non-zero data
+  useEffect(() => {
+    if (totalUsers > 0) {
+      setCachedTotalUsers(totalUsers);
+      localStorage.setItem('chatCachedTotalUsers', String(totalUsers));
+    }
+    if (onlineCount > 0) {
+      setCachedOnlineCount(onlineCount);
+      localStorage.setItem('chatCachedOnlineCount', String(onlineCount));
+    }
+  }, [totalUsers, onlineCount]);
+  
+  // Use the best available count (live or cached)
+  const displayTotalUsers = totalUsers > 0 ? totalUsers : cachedTotalUsers;
+  const displayOnlineCount = onlineCount > 0 ? onlineCount : cachedOnlineCount;
+  
+  // Reply functionality state
+  const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
+  const [contextMenuMessage, setContextMenuMessage] = useState<ChatMessage | null>(null);
+  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  
+  // Touch/swipe state for reply
+  const touchStartX = useRef<number>(0);
+  const touchCurrentX = useRef<number>(0);
+  const swipingMessageId = useRef<number | null>(null);
+  const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  
+  // Handle reply to message
+  const handleReply = useCallback((message: ChatMessage) => {
+    setReplyingTo(message);
+    setContextMenuMessage(null);
+    textareaRef.current?.focus();
+  }, []);
+  
+  // Cancel reply
+  const cancelReply = useCallback(() => {
+    setReplyingTo(null);
+  }, []);
+  
+  // Touch handlers for swipe-to-reply
+  const handleTouchStart = useCallback((e: React.TouchEvent, message: ChatMessage) => {
+    touchStartX.current = e.touches[0].clientX;
+    touchCurrentX.current = e.touches[0].clientX;
+    swipingMessageId.current = message.id;
+    
+    // Long press timer for context menu
+    longPressTimer.current = setTimeout(() => {
+      const rect = (e.target as HTMLElement).getBoundingClientRect();
+      setContextMenuPosition({ x: rect.left + rect.width / 2, y: rect.top });
+      setContextMenuMessage(message);
+      swipingMessageId.current = null;
+    }, 500);
+  }, []);
+  
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    // Cancel long press if moving
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    
+    touchCurrentX.current = e.touches[0].clientX;
+  }, []);
+  
+  const handleTouchEnd = useCallback((message: ChatMessage) => {
+    // Cancel long press timer
+    if (longPressTimer.current) {
+      clearTimeout(longPressTimer.current);
+      longPressTimer.current = null;
+    }
+    
+    const deltaX = touchStartX.current - touchCurrentX.current;
+    
+    // Swipe left threshold (50px) to trigger reply
+    if (deltaX > 50 && swipingMessageId.current === message.id) {
+      handleReply(message);
+    }
+    
+    swipingMessageId.current = null;
+    touchStartX.current = 0;
+    touchCurrentX.current = 0;
+  }, [handleReply]);
+  
+  // Close context menu when clicking outside
+  useEffect(() => {
+    const handleClickOutside = () => {
+      setContextMenuMessage(null);
+    };
+    
+    if (contextMenuMessage) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenuMessage]);
 
   // Save background preference to localStorage when it changes
   useEffect(() => {
@@ -82,7 +188,15 @@ export default function ChatInterface({
     const content = messageText.trim();
     if (!content || !isConnected) return;
 
-    onSendMessage(content);
+    // If replying, prepend reply reference to message
+    if (replyingTo) {
+      const replyPrefix = `↩️ @${replyingTo.user?.anonName || 'Неизвестный'}: "${replyingTo.content.substring(0, 50)}${replyingTo.content.length > 50 ? '...' : ''}"\n\n`;
+      onSendMessage(replyPrefix + content);
+      setReplyingTo(null);
+    } else {
+      onSendMessage(content);
+    }
+    
     setMessageText('');
     
     if (textareaRef.current) {
@@ -158,7 +272,7 @@ export default function ChatInterface({
           <div>
             <h1 className="font-semibold text-white">Анонимный чат</h1>
             <p className="text-xs text-zinc-200" data-testid="text-online-count">
-              <span className="text-blue-400 font-medium">{totalUsers}</span> <span className="text-zinc-200">участников</span> | <span className="text-green-400 font-medium">{onlineCount}</span> <span className="text-zinc-200">онлайн</span>
+              <span className="text-blue-400 font-medium">{displayTotalUsers}</span> <span className="text-zinc-200">участников</span> | <span className="text-green-400 font-medium">{displayOnlineCount}</span> <span className="text-zinc-200">онлайн</span>
             </p>
           </div>
         </div>
@@ -242,8 +356,11 @@ export default function ChatInterface({
             return (
               <div 
                 key={`${message.id}-${message.createdAt}`}
-                className="flex items-start space-x-3"
+                className="flex items-start space-x-3 group"
                 data-testid={`message-${message.id}`}
+                onTouchStart={(e) => handleTouchStart(e, message)}
+                onTouchMove={handleTouchMove}
+                onTouchEnd={() => handleTouchEnd(message)}
               >
                 {/* Clickable Avatar */}
                 <button
@@ -293,6 +410,14 @@ export default function ChatInterface({
                         )}
                       </>
                     )}
+                    {/* Reply button - appears on hover (desktop) */}
+                    <button
+                      onClick={() => handleReply(message)}
+                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-zinc-700 rounded"
+                      title="Ответить"
+                    >
+                      <Reply className="w-3 h-3 text-zinc-400" />
+                    </button>
                   </div>
                   
                   <div className={`rounded-lg px-3 py-2 mb-3 ${
@@ -324,7 +449,48 @@ export default function ChatInterface({
         
         <div ref={messagesEndRef} />
         </div>
+        
+        {/* Context Menu for Long Press */}
+        {contextMenuMessage && (
+          <div 
+            className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            style={{ 
+              left: Math.min(contextMenuPosition.x - 60, window.innerWidth - 130), 
+              top: Math.max(contextMenuPosition.y - 40, 60)
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              onClick={() => handleReply(contextMenuMessage)}
+              className="flex items-center gap-3 px-4 py-3 w-full hover:bg-zinc-700 transition-colors text-white"
+            >
+              <Reply className="w-4 h-4 text-violet-400" />
+              <span className="text-sm">Ответить</span>
+            </button>
+          </div>
+        )}
       </div>
+
+      {/* Reply Preview */}
+      {replyingTo && (
+        <div className="bg-zinc-900 border-t border-zinc-800 px-4 py-2 flex items-center gap-3">
+          <div className="w-1 h-10 bg-violet-500 rounded-full"></div>
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-violet-400 font-medium">
+              Ответ для {replyingTo.user?.anonName || 'Неизвестный'}
+            </p>
+            <p className="text-xs text-gray-400 truncate">
+              {replyingTo.content}
+            </p>
+          </div>
+          <button 
+            onClick={cancelReply}
+            className="p-1 hover:bg-zinc-800 rounded transition-colors"
+          >
+            <X className="w-4 h-4 text-gray-400" />
+          </button>
+        </div>
+      )}
 
       {/* Message Input */}
       <div className="bg-black border-t border-zinc-800 px-4 py-3">
@@ -335,7 +501,7 @@ export default function ChatInterface({
               value={messageText}
               onChange={handleInputChange}
               onKeyDown={handleKeyDown}
-              placeholder="Введите сообщение..."
+              placeholder={replyingTo ? "Введите ответ..." : "Введите сообщение..."}
               className="w-full resize-none bg-zinc-900 border border-zinc-700 rounded-2xl px-4 py-3 pr-4 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-zinc-500 focus:ring-1 focus:ring-zinc-500 transition-colors"
               rows={1}
               maxLength={1000}

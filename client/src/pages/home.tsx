@@ -279,14 +279,15 @@ export default function HomePage() {
               )}
             </div>
 
-            {/* Date info */}
-            <div className="flex items-center gap-4 mb-4 text-sm">
+            {/* Date info - two separate lines with sticker */}
+            <div className="flex flex-col gap-2 mb-4 text-sm">
               <div className="flex items-center gap-2 text-gray-400">
-                <Calendar className="w-4 h-4" />
+                <span className="text-xl">📅</span>
                 <span>Сегодня: <span className="text-white">{formatDate()}</span></span>
               </div>
-              <div className="text-gray-400">
-                До обновления: <span className="text-violet-400 font-semibold">{daysUntilUpdate} дней</span>
+              <div className="flex items-center gap-2 text-gray-400">
+                <span className="text-xl">⏳</span>
+                <span>До обновления: <span className="text-violet-400 font-semibold">{daysUntilUpdate} дней</span></span>
               </div>
             </div>
 
@@ -353,80 +354,12 @@ export default function HomePage() {
           </motion.div>
         </div>
 
-        {/* News Section */}
-        {(news.length > 0 || loading) && (
-          <div className="w-full max-w-[95vw] min-h-card mt-4">
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.7 }}
-              className="bg-zinc-900 rounded-xl p-5 border border-zinc-700"
-            >
-              <div className="flex items-center gap-3 mb-4">
-                <Newspaper className="w-6 h-6 text-cyan-400" />
-                <h3 className="text-xl font-semibold text-white">Новости</h3>
-              </div>
-              {loading ? (
-                <div className="skeleton rounded-lg h-32"></div>
-              ) : news.length === 0 ? (
-                <div className="text-center text-gray-400 py-8">Новостей пока нет</div>
-              ) : (
-              <div className="relative flex items-center justify-center gap-2">
-                {news.length > 1 && (
-                  <button
-                    onClick={prevNews}
-                    className="flex-shrink-0 hover:scale-110 transition-transform p-1"
-                    aria-label="Предыдущая новость"
-                  >
-                    <ChevronLeft className="w-6 h-6 text-white/70" />
-                  </button>
-                )}
-                
-                <div className="flex-1 overflow-hidden rounded-lg">
-                  <motion.div
-                    key={currentNewsIndex}
-                    initial={{ opacity: 0, x: 50 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    exit={{ opacity: 0, x: -50 }}
-                    transition={{ duration: 0.3 }}
-                    className="bg-zinc-800 rounded-lg p-5 min-h-[260px] flex flex-col justify-between"
-                  >
-                    <div>
-                      <h4 className="text-lg font-semibold text-white mb-3">{news[currentNewsIndex].title}</h4>
-                      <p className="text-sm text-gray-300 line-clamp-5">{news[currentNewsIndex].content}</p>
-                    </div>
-                    <div className="flex items-center justify-between mt-4">
-                      <span className="text-xs text-gray-500">
-                        {news[currentNewsIndex].authorName || 'АгуГрам'}
-                      </span>
-                      <span className="text-xs text-gray-500">
-                        {new Date(news[currentNewsIndex].createdAt).toLocaleDateString('ru-RU')}
-                      </span>
-                    </div>
-                  </motion.div>
-                </div>
-                
-                {news.length > 1 && (
-                  <button
-                    onClick={nextNews}
-                    className="flex-shrink-0 hover:scale-110 transition-transform p-1"
-                    aria-label="Следующая новость"
-                  >
-                    <ChevronRight className="w-6 h-6 text-white/70" />
-                  </button>
-                )}
-              </div>
-              )}
-            </motion.div>
-          </div>
-        )}
-
-        {/* Favorites Section */}
+        {/* Favorites Section - moved above News */}
         <div className="w-full max-w-[90vw] min-h-card mt-4">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.75 }}
+            transition={{ duration: 0.5, delay: 0.7 }}
             className="bg-zinc-900 rounded-xl p-6 border border-zinc-700"
           >
             <div className="flex items-center justify-between mb-4">
@@ -473,7 +406,6 @@ export default function HomePage() {
                         {favorite.favoriteUser.course && (
                           <p className="text-xs text-gray-400">
                             {favorite.favoriteUser.course} курс
-                            {favorite.favoriteUser.direction && ` • ${favorite.favoriteUser.direction}`}
                           </p>
                         )}
                       </div>
@@ -491,6 +423,74 @@ export default function HomePage() {
             )}
           </motion.div>
         </div>
+
+        {/* News Section */}
+        {(news.length > 0 || loading) && (
+          <div className="w-full max-w-[95vw] min-h-card mt-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.75 }}
+              className="bg-zinc-900 rounded-xl p-5 border border-zinc-700"
+            >
+              <div className="flex items-center gap-3 mb-4">
+                <Newspaper className="w-6 h-6 text-cyan-400" />
+                <h3 className="text-xl font-semibold text-white">Новости</h3>
+              </div>
+              {loading ? (
+                <div className="skeleton rounded-lg h-32"></div>
+              ) : news.length === 0 ? (
+                <div className="text-center text-gray-400 py-8">Новостей пока нет</div>
+              ) : (
+              <div className="relative flex items-center justify-center gap-2">
+                {news.length > 1 && (
+                  <button
+                    onClick={prevNews}
+                    className="flex-shrink-0 hover:scale-110 transition-transform p-1"
+                    aria-label="Предыдущая новость"
+                  >
+                    <ChevronLeft className="w-6 h-6 text-white/70" />
+                  </button>
+                )}
+                
+                <div className="w-[80%] overflow-hidden rounded-lg mx-auto">
+                  <motion.div
+                    key={currentNewsIndex}
+                    initial={{ opacity: 0, x: 50 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -50 }}
+                    transition={{ duration: 0.3 }}
+                    className="bg-zinc-800 rounded-lg p-5 min-h-[260px] flex flex-col justify-between"
+                  >
+                    <div>
+                      <h4 className="text-lg font-semibold text-white mb-3">{news[currentNewsIndex].title}</h4>
+                      <p className="text-sm text-gray-300 line-clamp-5">{news[currentNewsIndex].content}</p>
+                    </div>
+                    <div className="flex items-center justify-between mt-4">
+                      <span className="text-xs text-gray-500">
+                        {news[currentNewsIndex].authorName || 'АгуГрам'}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {new Date(news[currentNewsIndex].createdAt).toLocaleDateString('ru-RU')}
+                      </span>
+                    </div>
+                  </motion.div>
+                </div>
+                
+                {news.length > 1 && (
+                  <button
+                    onClick={nextNews}
+                    className="flex-shrink-0 hover:scale-110 transition-transform p-1"
+                    aria-label="Следующая новость"
+                  >
+                    <ChevronRight className="w-6 h-6 text-white/70" />
+                  </button>
+                )}
+              </div>
+              )}
+            </motion.div>
+          </div>
+        )}
 
         {/* Top Users Leaderboard */}
         {(topUsers.length > 0 || loading) && (

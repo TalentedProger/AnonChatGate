@@ -229,10 +229,10 @@ export default function UserProfilePage() {
           {/* Name */}
           <h2 className="text-2xl font-bold text-white">{profile.anonName}</h2>
           
-          {/* Course info */}
+          {/* Course info - only show course, not direction for privacy */}
           <p className="text-sm text-indigo-300">
-            {profile.course && profile.direction 
-              ? `${profile.course} курс • ${profile.direction}` 
+            {profile.course 
+              ? `${profile.course} курс` 
               : 'Анонимный пользователь'}
           </p>
 
