@@ -5,7 +5,27 @@ server/public
 vite.config.ts.*
 *.tar.gz
 
+# Environment variables (CRITICAL - contains secrets!)
+.env
+.env.local
+.env.*.local
+.env.production
+.env.development
+
+# Uploads directory (user-generated content)
+uploads/
+
 # Security: Prevent token files from being committed
 approved_tokens.json
 *.tokens.json
 auth_tokens.*
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo

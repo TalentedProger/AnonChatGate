@@ -9,7 +9,8 @@ export interface AuthState {
   } | null;
   token: string | null;
   refreshToken: string | null;
-  status: string;
+  status: 'loading' | 'authenticated' | 'unauthenticated' | 'expired';
+  tokenExpiresAt: number | null;
 }
 
 export interface AuthTokens {
@@ -18,49 +19,113 @@ export interface AuthTokens {
 }
 
 const AUTH_STATE_KEY = 'chat_auth_state';
-const TOKEN_REFRESH_BUFFER = 2 * 60 * 1000; // 2 minutes before expiry
-const TOKEN_LIFETIME = 15 * 60 * 1000; // 15 minutes in milliseconds
+const TOKEN_REFRESH_THRESHOLD = 2 * 60; // Refresh 2 minutes before expiry (in seconds)
 
 class AuthManager {
   private authState: AuthState = {
     user: null,
     token: null,
     refreshToken: null,
-    status: 'loading'
+    status: 'loading',
+    tokenExpiresAt: null
   };
 
-  private refreshTimer: NodeJS.Timeout | null = null;
+  private refreshTimer: ReturnType<typeof setTimeout> | null = null;
   private refreshPromise: Promise<AuthTokens> | null = null;
   private listeners: ((state: AuthState) => void)[] = [];
 
   constructor() {
     this.loadFromStorage();
-    this.scheduleTokenRefresh();
+  }
+
+  // Parse JWT and get expiry timestamp (in seconds)
+  private getTokenExpiry(token: string): number | null {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      const payload = JSON.parse(atob(parts[1]));
+      return payload.exp || null;
+    } catch {
+      return null;
+    }
+  }
+
+  // Check if token is expired or about to expire
+  private isTokenExpired(token: string, bufferSeconds: number = 0): boolean {
+    const expiry = this.getTokenExpiry(token);
+    if (!expiry) return true;
+    const now = Math.floor(Date.now() / 1000);
+    return expiry <= (now + bufferSeconds);
   }
 
   // Load auth state from localStorage
   private loadFromStorage() {
     try {
       const stored = localStorage.getItem(AUTH_STATE_KEY);
-      if (stored) {
-        const parsedState = JSON.parse(stored);
-        // Only restore if tokens exist and are potentially still valid
-        if (parsedState.token && parsedState.refreshToken) {
-          this.authState = { ...this.authState, ...parsedState };
-        }
+      if (!stored) {
+        this.authState.status = 'unauthenticated';
+        return;
       }
-    } catch (error) {
-      console.error('Failed to load auth state from storage:', error);
+
+      const parsedState = JSON.parse(stored);
+      
+      // Validate stored data
+      if (!parsedState.token || !parsedState.refreshToken || !parsedState.user) {
+        this.clearStorage();
+        this.authState.status = 'unauthenticated';
+        return;
+      }
+
+      // Check if access token is still valid (with 30 second buffer)
+      if (!this.isTokenExpired(parsedState.token, 30)) {
+        // Token is still valid
+        const expiry = this.getTokenExpiry(parsedState.token);
+        this.authState = { 
+          ...parsedState, 
+          status: 'authenticated',
+          tokenExpiresAt: expiry ? expiry * 1000 : null
+        };
+        console.log('[Auth] Restored valid session from storage');
+        this.scheduleTokenRefresh();
+        return;
+      }
+
+      // Access token expired - check refresh token
+      if (!this.isTokenExpired(parsedState.refreshToken)) {
+        // Refresh token is valid, we'll refresh on first API call
+        this.authState = { 
+          ...parsedState, 
+          status: 'authenticated', // Still authenticated, token will refresh automatically
+          tokenExpiresAt: null
+        };
+        console.log('[Auth] Access token expired, refresh token valid - will refresh on demand');
+        return;
+      }
+
+      // Both tokens expired
+      console.log('[Auth] Session expired, need re-authentication');
       this.clearStorage();
+      this.authState.status = 'expired';
+      
+    } catch (error) {
+      console.error('[Auth] Failed to load auth state:', error);
+      this.clearStorage();
+      this.authState.status = 'unauthenticated';
     }
   }
 
   // Save auth state to localStorage
   private saveToStorage() {
     try {
-      localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(this.authState));
+      const toStore = {
+        user: this.authState.user,
+        token: this.authState.token,
+        refreshToken: this.authState.refreshToken,
+        tokenExpiresAt: this.authState.tokenExpiresAt
+      };
+      localStorage.setItem(AUTH_STATE_KEY, JSON.stringify(toStore));
     } catch (error) {
-      console.error('Failed to save auth state to storage:', error);
+      console.error('[Auth] Failed to save auth state:', error);
     }
   }
 
@@ -69,7 +134,7 @@ class AuthManager {
     try {
       localStorage.removeItem(AUTH_STATE_KEY);
     } catch (error) {
-      console.error('Failed to clear auth storage:', error);
+      console.error('[Auth] Failed to clear storage:', error);
     }
   }
 
@@ -78,25 +143,20 @@ class AuthManager {
     const prevState = { ...this.authState };
     this.authState = { ...this.authState, ...newState };
     
-    // Save to storage if we have tokens
-    if (this.authState.token && this.authState.refreshToken) {
+    // Save to storage if authenticated
+    if (this.authState.token && this.authState.refreshToken && this.authState.user) {
       this.saveToStorage();
-    } else {
+    } else if (!this.authState.token) {
       this.clearStorage();
     }
 
-    // Notify listeners only if state actually changed
+    // Notify listeners only if state changed
     if (JSON.stringify(prevState) !== JSON.stringify(this.authState)) {
       this.listeners.forEach(listener => listener(this.authState));
     }
-
-    // Schedule next refresh if we got new tokens
-    if (newState.token && newState.refreshToken) {
-      this.scheduleTokenRefresh();
-    }
   }
 
-  // Schedule the next token refresh
+  // Schedule the next token refresh based on token expiry
   private scheduleTokenRefresh() {
     // Clear existing timer
     if (this.refreshTimer) {
@@ -104,27 +164,35 @@ class AuthManager {
       this.refreshTimer = null;
     }
 
-    // Only schedule if we have tokens
     if (!this.authState.token || !this.authState.refreshToken) {
       return;
     }
 
-    // Schedule refresh 2 minutes before token expires (13 minutes from now)
-    const refreshDelay = TOKEN_LIFETIME - TOKEN_REFRESH_BUFFER;
+    const expiry = this.getTokenExpiry(this.authState.token);
+    if (!expiry) {
+      console.warn('[Auth] Could not determine token expiry');
+      return;
+    }
+
+    const now = Math.floor(Date.now() / 1000);
+    // Refresh 2 minutes before expiry
+    const refreshTime = expiry - TOKEN_REFRESH_THRESHOLD;
+    const timeToRefresh = (refreshTime - now) * 1000;
+    
+    if (timeToRefresh <= 0) {
+      // Already past refresh time, don't schedule (will refresh on next API call)
+      console.log('[Auth] Token already needs refresh');
+      return;
+    }
+
+    console.log(`[Auth] Scheduling token refresh in ${Math.round(timeToRefresh / 1000)}s`);
     
     this.refreshTimer = setTimeout(() => {
-      this.refreshToken().catch(error => {
-        console.error('Automatic token refresh failed:', error);
-        // If refresh fails, mark user as needing to re-authenticate
-        this.updateAuthState({
-          token: null,
-          refreshToken: null,
-          status: 'expired'
-        });
+      console.log('[Auth] Scheduled refresh triggered');
+      this.doRefreshToken().catch(error => {
+        console.error('[Auth] Scheduled refresh failed:', error);
       });
-    }, refreshDelay);
-
-    console.log(`Token refresh scheduled in ${refreshDelay / 1000 / 60} minutes`);
+    }, timeToRefresh);
   }
 
   // Set initial auth data (from login/dev auth)
@@ -134,12 +202,22 @@ class AuthManager {
     token: string;
     refreshToken: string;
   }) {
+    const tokenExpiry = this.getTokenExpiry(authData.token);
+    
+    console.log('[Auth] Setting auth data', {
+      userId: authData.user?.id,
+      tokenExpiry: tokenExpiry ? new Date(tokenExpiry * 1000).toISOString() : null
+    });
+    
     this.updateAuthState({
       user: authData.user,
       token: authData.token,
       refreshToken: authData.refreshToken,
-      status: authData.status
+      status: 'authenticated',
+      tokenExpiresAt: tokenExpiry ? tokenExpiry * 1000 : null
     });
+    
+    this.scheduleTokenRefresh();
   }
 
   // Get current auth state
@@ -147,31 +225,65 @@ class AuthManager {
     return { ...this.authState };
   }
 
-  // Get current valid token (with automatic refresh if needed)
+  // Get current token for API requests - DOES NOT trigger refresh
+  // Returns current token if valid, null if needs refresh
+  getCurrentToken(): string | null {
+    if (!this.authState.token) {
+      return null;
+    }
+    
+    // If token is expired or expiring soon, return null to signal need for refresh
+    if (this.isTokenExpired(this.authState.token, 30)) {
+      return null;
+    }
+    
+    return this.authState.token;
+  }
+
+  // Get valid token - may trigger refresh if needed
+  // This should only be called when actually making an API request
   async getValidToken(): Promise<string | null> {
-    // If no token, return null
+    // If no token at all, return null
     if (!this.authState.token) {
       return null;
     }
 
-    // If refresh is already in progress, wait for it
+    // If refresh is in progress, wait for it
     if (this.refreshPromise) {
       try {
         const tokens = await this.refreshPromise;
         return tokens.token;
-      } catch (error) {
-        console.error('Token refresh failed:', error);
+      } catch {
         return null;
       }
     }
 
-    // Return current token (assume it's valid since we refresh proactively)
-    return this.authState.token;
+    // Check if token is still valid (with 30 second buffer)
+    if (!this.isTokenExpired(this.authState.token, 30)) {
+      return this.authState.token;
+    }
+
+    // Token is expired or expiring soon - try to refresh
+    console.log('[Auth] Token needs refresh before API call');
+    
+    // Check if we can refresh
+    if (!this.authState.refreshToken || this.isTokenExpired(this.authState.refreshToken)) {
+      console.log('[Auth] Cannot refresh - refresh token missing or expired');
+      this.updateAuthState({ status: 'expired' });
+      return null;
+    }
+
+    try {
+      const tokens = await this.doRefreshToken();
+      return tokens.token;
+    } catch {
+      return null;
+    }
   }
 
-  // Refresh the access token using refresh token
-  async refreshToken(): Promise<AuthTokens> {
-    // If already refreshing, return the existing promise
+  // Internal refresh token method
+  private async doRefreshToken(): Promise<AuthTokens> {
+    // Prevent concurrent refresh calls
     if (this.refreshPromise) {
       return this.refreshPromise;
     }
@@ -180,29 +292,60 @@ class AuthManager {
       throw new Error('No refresh token available');
     }
 
+    // Check if refresh token is still valid
+    if (this.isTokenExpired(this.authState.refreshToken)) {
+      console.log('[Auth] Refresh token expired');
+      this.updateAuthState({
+        token: null,
+        refreshToken: null,
+        status: 'expired'
+      });
+      throw new Error('Refresh token expired');
+    }
+
+    console.log('[Auth] Starting token refresh');
+
     this.refreshPromise = (async () => {
       try {
-        const response = await apiRequest('POST', '/api/auth/refresh', {
-          refreshToken: this.authState.refreshToken
+        // Make direct fetch to avoid recursion through apiRequest
+        const response = await fetch('/api/auth/refresh', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            refreshToken: this.authState.refreshToken
+          }),
+          credentials: 'include'
         });
         
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`Refresh failed: ${response.status} ${errorText}`);
+        }
+        
         const data = await response.json();
+        const tokenExpiry = this.getTokenExpiry(data.token);
 
-        // Update auth state with new tokens
+        console.log('[Auth] Token refresh successful');
+
         this.updateAuthState({
           user: data.user,
-          status: data.status,
           token: data.token,
-          refreshToken: data.refreshToken
+          refreshToken: data.refreshToken,
+          status: 'authenticated',
+          tokenExpiresAt: tokenExpiry ? tokenExpiry * 1000 : null
         });
+
+        // Schedule next refresh
+        this.scheduleTokenRefresh();
 
         return {
           token: data.token,
           refreshToken: data.refreshToken
         };
       } catch (error) {
-        console.error('Token refresh failed:', error);
-        // Clear tokens on refresh failure
+        console.error('[Auth] Token refresh failed:', error);
         this.updateAuthState({
           token: null,
           refreshToken: null,
@@ -210,7 +353,6 @@ class AuthManager {
         });
         throw error;
       } finally {
-        // Clear the refresh promise
         this.refreshPromise = null;
       }
     })();
@@ -218,32 +360,39 @@ class AuthManager {
     return this.refreshPromise;
   }
 
-  // Handle auth error (e.g., from WebSocket)
+  // Public method for manual refresh
+  async refreshToken(): Promise<AuthTokens> {
+    return this.doRefreshToken();
+  }
+
+  // Handle auth error (e.g., from WebSocket or API 401)
   async handleAuthError(): Promise<boolean> {
-    console.log('Handling auth error, attempting token refresh...');
+    console.log('[Auth] Handling auth error');
     
+    // If already refreshing, wait for it
+    if (this.refreshPromise) {
+      try {
+        await this.refreshPromise;
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    
+    // Try to refresh
     try {
-      await this.refreshToken();
-      return true; // Successfully refreshed
-    } catch (error) {
-      console.error('Failed to refresh token after auth error:', error);
-      // Mark as expired so user can re-authenticate
-      this.updateAuthState({
-        token: null,
-        refreshToken: null,
-        status: 'expired'
-      });
-      return false; // Failed to refresh
+      await this.doRefreshToken();
+      return true;
+    } catch {
+      return false;
     }
   }
 
   // Subscribe to auth state changes
   subscribe(listener: (state: AuthState) => void) {
     this.listeners.push(listener);
-    // Immediately notify with current state
     listener(this.authState);
     
-    // Return unsubscribe function
     return () => {
       const index = this.listeners.indexOf(listener);
       if (index > -1) {
@@ -265,21 +414,24 @@ class AuthManager {
       user: null,
       token: null,
       refreshToken: null,
-      status: 'loading'
+      status: 'unauthenticated',
+      tokenExpiresAt: null
     });
   }
 
   // Check if user is authenticated
   isAuthenticated(): boolean {
-    // In development, simplify auth flow
-    if (import.meta.env.DEV) {
-      return !!(this.authState.token && this.authState.user);
-    }
-    // In production, use proper authentication checks
-    return !!(this.authState.token && this.authState.user && this.authState.user.status === 'approved');
+    return this.authState.status === 'authenticated' && 
+           !!this.authState.token && 
+           !!this.authState.user;
   }
 
-  // Cleanup (call when component unmounts or app closes)
+  // Check if session expired and needs re-authentication
+  isSessionExpired(): boolean {
+    return this.authState.status === 'expired';
+  }
+
+  // Cleanup
   cleanup() {
     if (this.refreshTimer) {
       clearTimeout(this.refreshTimer);
@@ -308,10 +460,12 @@ export function useAuth() {
     ...authState,
     refreshToken: () => authManager.refreshToken(),
     getValidToken: () => authManager.getValidToken(),
+    getCurrentToken: () => authManager.getCurrentToken(),
     handleAuthError: () => authManager.handleAuthError(),
     setAuthData: (data: Parameters<typeof authManager.setAuthData>[0]) => authManager.setAuthData(data),
     clearAuth: () => authManager.clearAuth(),
     isAuthenticated: () => authManager.isAuthenticated(),
+    isSessionExpired: () => authManager.isSessionExpired(),
   };
 }
 

@@ -1,51 +1,216 @@
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { motion, AnimatePresence } from "framer-motion";
-import { Heart, Star, Send, Instagram, Settings, Plus, EyeOff } from "lucide-react";
-import { useState, useEffect } from "react";
+import { Heart, Star, Send, Instagram, Settings, Plus, EyeOff, Edit2, Camera, X, Save, Link as LinkIcon } from "lucide-react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from '@/lib/auth';
 import { apiRequest } from '@/lib/queryClient';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import maleProfile from '@/assets/male_profile.jpg';
 import femaleProfile from '@/assets/female_profile.jpg';
+import type { UserStatistics } from '@/types';
 
 export default function ProfilePage() {
   const auth = useAuth();
-  const [activeProfile, setActiveProfile] = useState("main");
-  const [menuOpen, setMenuOpen] = useState(false);
+  const queryClient = useQueryClient();
   const [profile, setProfile] = useState<any>(null);
+  const [statistics, setStatistics] = useState<UserStatistics>({ popularity: 0, views: 0, friendRequests: 0 });
+  const [activeProfile, setActiveProfile] = useState<'main' | 'anon'>('main');
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [editLinkOpen, setEditLinkOpen] = useState(false);
+  const [currentEditLink, setCurrentEditLink] = useState<'telegram' | 'vk' | 'instagram' | null>(null);
+  const [linkValue, setLinkValue] = useState('');
+  const [editingData, setEditingData] = useState({ displayName: '', course: '', direction: '', bio: '' });
+  const [mainAvatar, setMainAvatar] = useState<string | null>(null);
+  const [selectedPhotos, setSelectedPhotos] = useState<(string | null)[]>([null, null, null]);
+  const [comingSoonOpen, setComingSoonOpen] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const photoInputRefs = useRef<(HTMLInputElement | null)[]>([null, null, null]);
+  const [socialLinks, setSocialLinks] = useState({ telegram: '', vk: '', instagram: '' });
 
-  // Load user profile data
+  // Load user profile data with React Query for caching
+  const { data: profileData } = useQuery({
+    queryKey: ['user-profile', auth.user?.id],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/profile');
+      if (!response.ok) throw new Error('Failed to load profile');
+      const data = await response.json();
+      return data.profile;
+    },
+    enabled: auth.isAuthenticated(),
+    staleTime: 30000, // Cache for 30 seconds
+    refetchOnWindowFocus: false // Don't refetch on window focus to reduce requests
+  });
+
+  // Load statistics with React Query
+  const { data: statsData } = useQuery({
+    queryKey: ['user-statistics', auth.user?.id],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/statistics/user');
+      if (!response.ok) return { popularity: 0, views: 0, friendRequests: 0 };
+      const data = await response.json();
+      return {
+        popularity: data.popularity || 0,
+        views: data.views || 0,
+        friendRequests: data.friendRequests || 0
+      };
+    },
+    enabled: auth.isAuthenticated(),
+    staleTime: 30000,
+    refetchOnWindowFocus: false
+  });
+
+  // Update local state when profile data loads
   useEffect(() => {
-    const loadProfile = async () => {
+    if (profileData) {
+      setProfile(profileData);
+      setEditingData({
+        displayName: profileData?.displayName || '',
+        course: profileData?.course || '',
+        direction: profileData?.direction || '',
+        bio: profileData?.bio || ''
+      });
+      setSocialLinks({
+        telegram: profileData?.telegram || '',
+        vk: profileData?.vk || '',
+        instagram: profileData?.instagram || ''
+      });
+    }
+  }, [profileData]);
+
+  // Update statistics when data loads
+  useEffect(() => {
+    if (statsData) {
+      setStatistics(statsData);
+    }
+  }, [statsData]);
+
+  // Memoize avatar to prevent re-computation on every render
+  const profileAvatar = useMemo(() => {
+    if (mainAvatar) return mainAvatar;
+    if (!profile?.gender) return undefined;
+    return profile.gender === 'male' ? maleProfile : femaleProfile;
+  }, [mainAvatar, profile?.gender]);
+
+  const handleEditProfile = () => {
+    setMenuOpen(false);
+    setEditProfileOpen(true);
+  };
+
+  const handleSaveProfile = async () => {
+    try {
+      const profileUpdate = {
+        displayName: editingData.displayName,
+        course: editingData.course,
+        direction: editingData.direction,
+        bio: editingData.bio,
+        gender: profile?.gender,
+        telegram: socialLinks.telegram,
+        vk: socialLinks.vk,
+        instagram: socialLinks.instagram
+      };
+      
+      const response = await apiRequest('PATCH', '/api/profile', profileUpdate);
+      if (response.ok) {
+        const data = await response.json();
+        setProfile(data.profile);
+        // Update social links state
+        setSocialLinks({
+          telegram: data.profile?.telegram || '',
+          vk: data.profile?.vk || '',
+          instagram: data.profile?.instagram || ''
+        });
+        // Invalidate and refetch profile cache
+        queryClient.invalidateQueries({ queryKey: ['user-profile', auth.user?.id] });
+        setEditProfileOpen(false);
+      }
+    } catch (error) {
+      console.error('Failed to save profile:', error);
+      alert('Ошибка при сохранении профиля');
+    }
+  };
+
+  const handleChangePhoto = () => {
+    setMenuOpen(false);
+    // Show coming soon modal instead of file picker
+    setComingSoonOpen(true);
+  };
+
+  const handleAvatarChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    // Placeholder - feature coming soon
+    setComingSoonOpen(true);
+  };
+
+  const handlePhotoClick = (index: number) => {
+    // Show coming soon modal instead of file picker
+    setComingSoonOpen(true);
+  };
+
+  const handlePhotoChange = (index: number, e: React.ChangeEvent<HTMLInputElement>) => {
+    // Placeholder - feature coming soon
+    setComingSoonOpen(true);
+  };
+
+  const handleDeletePhoto = (index: number) => {
+    // Placeholder - feature coming soon
+    setComingSoonOpen(true);
+  };
+
+  const handleEditLink = (type: 'telegram' | 'vk' | 'instagram') => {
+    setCurrentEditLink(type);
+    setLinkValue(socialLinks[type]);
+    setEditLinkOpen(true);
+  };
+
+  const handleSaveLink = async () => {
+    if (currentEditLink) {
+      const updatedLinks = { ...socialLinks, [currentEditLink]: linkValue };
+      setSocialLinks(updatedLinks);
+      
+      // Save to server - need to send full profile to pass validation
       try {
-        const response = await apiRequest('GET', '/api/profile');
+        const profileUpdate = {
+          displayName: editingData.displayName || profile?.displayName,
+          course: editingData.course || profile?.course,
+          direction: editingData.direction || profile?.direction,
+          bio: editingData.bio || profile?.bio,
+          gender: profile?.gender,
+          telegram: updatedLinks.telegram,
+          vk: updatedLinks.vk,
+          instagram: updatedLinks.instagram
+        };
+        
+        const response = await apiRequest('PATCH', '/api/profile', profileUpdate);
+        
         if (response.ok) {
           const data = await response.json();
           setProfile(data.profile);
+          // Invalidate and refetch profile cache
+          queryClient.invalidateQueries({ queryKey: ['user-profile', auth.user?.id] });
         }
       } catch (error) {
-        console.error('Failed to load profile:', error);
+        console.error('Failed to save social link:', error);
+        alert('Ошибка при сохранении ссылки');
       }
-    };
-
-    if (auth.isAuthenticated()) {
-      loadProfile();
     }
-  }, [auth]);
-
-  const getProfileAvatar = (): string | undefined => {
-    if (!profile?.gender) return undefined;
-    return profile.gender === 'male' ? maleProfile : femaleProfile;
+    setEditLinkOpen(false);
+    setCurrentEditLink(null);
+    setLinkValue('');
   };
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white p-6 flex flex-col items-center pb-20">
       {/* Compact Switcher */}
       <div className="fixed top-6 left-6 flex items-center bg-white/10 backdrop-blur-md rounded-full p-1 z-50">
-        {[
-          { key: "main", icon: "👤" },
-          { key: "anon", icon: "🎭" },
-        ].map((profile) => (
+        {([
+          { key: "main" as const, icon: "👤" },
+          { key: "anon" as const, icon: "🎭" },
+        ]).map((profile) => (
           <motion.div
             key={profile.key}
             whileTap={{ scale: 0.9 }}
@@ -65,7 +230,9 @@ export default function ProfilePage() {
         <div className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-black hover:bg-violet-600 transition-colors"
+            className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
+              menuOpen ? 'bg-violet-600' : 'bg-black hover:bg-violet-600'
+            }`}
             data-testid="button-menu"
           >
             <Settings className="text-white" />
@@ -77,13 +244,33 @@ export default function ProfilePage() {
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -10 }}
                 transition={{ duration: 0.2 }}
-                className="absolute right-0 mt-2 w-48 bg-black border border-gray-700 rounded-xl shadow-lg overflow-hidden"
+                className="absolute right-0 mt-2 w-64 bg-gradient-to-br from-black/95 to-violet-900/30 border-2 border-violet-500/30 rounded-2xl shadow-[0_0_30px_rgba(139,92,246,0.3)] overflow-hidden backdrop-blur-md"
               >
-                <ul className="flex flex-col text-left text-sm">
-                  <li className="px-4 py-2 hover:bg-gray-800 cursor-pointer" data-testid="menu-edit-profile">Редактировать профиль</li>
-                  <li className="px-4 py-2 hover:bg-gray-800 cursor-pointer" data-testid="menu-change-photo">Изменить фото</li>
-                  <li className="px-4 py-2 hover:bg-gray-800 cursor-pointer" data-testid="menu-help">Помощь</li>
-                  <li className="px-4 py-2 hover:bg-gray-800 cursor-pointer" data-testid="menu-settings">Настройки</li>
+                <ul className="flex flex-col text-left">
+                  <li 
+                    onClick={handleEditProfile}
+                    className="px-6 py-4 hover:bg-violet-500/20 cursor-pointer transition-all duration-200 flex items-center gap-3 border-b border-white/10" 
+                    data-testid="menu-edit-profile"
+                  >
+                    <Edit2 className="w-5 h-5 text-violet-400" />
+                    <span className="text-base font-semibold text-white">Редактировать</span>
+                  </li>
+                  <li 
+                    onClick={handleChangePhoto}
+                    className="px-6 py-4 hover:bg-violet-500/20 cursor-pointer transition-all duration-200 flex items-center gap-3 border-b border-white/10" 
+                    data-testid="menu-change-photo"
+                  >
+                    <Camera className="w-5 h-5 text-cyan-400" />
+                    <span className="text-base font-semibold text-white">Изменить фото</span>
+                  </li>
+                  <li className="px-6 py-4 hover:bg-violet-500/20 cursor-pointer transition-all duration-200 flex items-center gap-3 border-b border-white/10" data-testid="menu-help">
+                    <span className="text-2xl">❓</span>
+                    <span className="text-base font-semibold text-white">Помощь</span>
+                  </li>
+                  <li className="px-6 py-4 hover:bg-violet-500/20 cursor-pointer transition-all duration-200 flex items-center gap-3" data-testid="menu-settings">
+                    <Settings className="w-5 h-5 text-pink-400" />
+                    <span className="text-base font-semibold text-white">Настройки</span>
+                  </li>
                 </ul>
               </motion.div>
             )}
@@ -103,14 +290,26 @@ export default function ProfilePage() {
               transition={{ duration: 0.3 }}
               className="flex flex-col items-center space-y-6"
             >
-              <div className="relative w-32 h-32 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
-                {getProfileAvatar() ? (
-                  <img src={getProfileAvatar()} alt="Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-3xl font-bold text-white">?</span>
-                )}
-                <div className="absolute bottom-2 right-2 w-4 h-4 rounded-full bg-green-500 border-2 border-black"></div>
+              <div 
+                className="relative w-32 h-32 rounded-full overflow-visible flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500 cursor-pointer hover:opacity-90 transition-opacity"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <div className="absolute inset-0 rounded-full overflow-hidden">
+                  {profileAvatar ? (
+                    <img src={profileAvatar} alt="Profile" className="w-full h-full object-cover" loading="eager" />
+                  ) : (
+                    <span className="text-3xl font-bold text-white flex items-center justify-center h-full">?</span>
+                  )}
+                </div>
+                <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-green-400 animate-pulse border-2 border-black z-10"></div>
               </div>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarChange}
+              />
               <h1 className="text-2xl font-bold text-white" data-testid="text-profile-name">
                 {profile?.displayName || 'Пользователь'}
               </h1>
@@ -122,13 +321,13 @@ export default function ProfilePage() {
               <div className="grid grid-cols-2 gap-4 w-full">
                 <MetricCard
                   icon={<Heart className="text-red-500 fill-red-500" />}
-                  value="128"
+                  value={statistics.friendRequests.toString()}
                   label="Знакомства"
                   borderColor="border-red-500 shadow-[0_0_10px_#ff000080]"
                 />
                 <MetricCard
                   icon={<Star className="text-yellow-400 fill-yellow-400" />}
-                  value="542"
+                  value={statistics.popularity.toString()}
                   label="Популярность"
                   borderColor="border-yellow-400 shadow-[0_0_10px_#ffff0080]"
                 />
@@ -143,23 +342,61 @@ export default function ProfilePage() {
 
               {/* Links */}
               <Section title="Ссылки">
-                <div className="flex gap-3 overflow-x-auto pb-2">
-                  <SocialButton icon={<Send className="w-6 h-6 text-cyan-400" />} label="Telegram" />
-                  <SocialButton icon={<div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">VK</div>} label="Vkontakte" />
-                  <SocialButton icon={<Instagram className="w-6 h-6 text-violet-400" />} label="Instagram" />
+                <div className="flex justify-center items-center gap-6 pb-2">
+                  <SocialButton 
+                    icon={<Send className="w-6 h-6 text-cyan-400" />} 
+                    label="Telegram" 
+                    onClick={() => handleEditLink('telegram')}
+                    hasLink={!!socialLinks.telegram}
+                  />
+                  <SocialButton 
+                    icon={<div className="w-6 h-6 bg-blue-600 rounded flex items-center justify-center text-white text-xs font-bold">VK</div>} 
+                    label="Vkontakte" 
+                    onClick={() => handleEditLink('vk')}
+                    hasLink={!!socialLinks.vk}
+                  />
+                  <SocialButton 
+                    icon={<Instagram className="w-6 h-6 text-violet-400" />} 
+                    label="Instagram" 
+                    onClick={() => handleEditLink('instagram')}
+                    hasLink={!!socialLinks.instagram}
+                  />
                 </div>
               </Section>
 
               {/* Album */}
               <Section title="Фотоальбом">
                 <div className="grid grid-cols-3 gap-3">
-                  {[...Array(3)].map((_, i) => (
+                  {selectedPhotos.map((photo, i) => (
                     <motion.div
                       key={i}
-                      className="rounded-xl overflow-hidden border border-white/30 flex items-center justify-center bg-white/10 aspect-[3/4]"
+                      className="relative rounded-xl overflow-hidden border border-white/30 flex items-center justify-center bg-white/10 aspect-[3/4] cursor-pointer hover:border-violet-400 transition-colors"
                       data-testid={`photo-slot-${i}`}
+                      onClick={() => !photo && handlePhotoClick(i)}
                     >
-                      <Plus className="w-6 h-6 text-white/60" />
+                      {photo ? (
+                        <>
+                          <img src={photo} alt={`Photo ${i + 1}`} className="w-full h-full object-cover" />
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeletePhoto(i);
+                            }}
+                            className="absolute top-1 right-1 w-6 h-6 bg-red-500 rounded-full flex items-center justify-center hover:bg-red-600 transition-colors"
+                          >
+                            <X className="w-4 h-4 text-white" />
+                          </button>
+                        </>
+                      ) : (
+                        <Plus className="w-6 h-6 text-white/60" />
+                      )}
+                      <input
+                        ref={(el) => (photoInputRefs.current[i] = el)}
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => handlePhotoChange(i, e)}
+                      />
                     </motion.div>
                   ))}
                 </div>
@@ -174,17 +411,21 @@ export default function ProfilePage() {
               transition={{ duration: 0.3 }}
               className="flex flex-col items-center space-y-6"
             >
-              <div className="relative w-32 h-32 rounded-full overflow-hidden flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
-                {getProfileAvatar() ? (
-                  <img src={getProfileAvatar()} alt="Anonymous Profile" className="w-full h-full object-cover" />
-                ) : (
-                  <span className="text-3xl font-bold text-white">?</span>
-                )}
-                <div className="absolute bottom-2 right-2 w-4 h-4 rounded-full bg-green-500 border-2 border-black"></div>
+              <div className="relative w-32 h-32 rounded-full overflow-visible flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
+                <div className="absolute inset-0 rounded-full overflow-hidden">
+                  {profile?.gender === 'male' ? (
+                    <img src={maleProfile} alt="Anonymous Profile" className="w-full h-full object-cover" />
+                  ) : profile?.gender === 'female' ? (
+                    <img src={femaleProfile} alt="Anonymous Profile" className="w-full h-full object-cover" />
+                  ) : (
+                    <span className="text-3xl font-bold text-white flex items-center justify-center h-full">?</span>
+                  )}
+                </div>
+                <div className="absolute bottom-1 right-1 w-5 h-5 rounded-full bg-green-400 animate-pulse border-2 border-black z-10"></div>
               </div>
               <h2 className="text-2xl font-bold" data-testid="text-anon-name">{auth.user?.anonName || 'Student_1'}</h2>
 
-              {/* Metrics */}
+              {/* Metrics - Hidden in anonymous profile */}
               <div className="grid grid-cols-2 gap-4 w-full">
                 <MetricCard
                   icon={<Heart className="text-red-500 fill-red-500" />}
@@ -233,6 +474,170 @@ export default function ProfilePage() {
           )}
         </AnimatePresence>
       </div>
+
+      {/* Edit Profile Dialog */}
+      <Dialog open={editProfileOpen} onOpenChange={setEditProfileOpen}>
+        <DialogContent className="bg-gradient-to-br from-black/95 to-violet-900/30 backdrop-blur-md border-2 border-violet-500/30 text-white w-[90%] max-w-[500px] rounded-[25px]" hideClose>
+          <button
+            onClick={() => setEditProfileOpen(false)}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-white/10 rounded-full transition-colors z-50"
+          >
+            <X className="w-5 h-5 font-bold" strokeWidth={3} />
+          </button>
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-[#a855f7]">
+              Профиль
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Отредактируйте информацию вашего профиля
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium text-gray-300 mb-2 block">Имя</label>
+              <Input
+                value={editingData.displayName}
+                onChange={(e) => setEditingData(prev => ({ ...prev, displayName: e.target.value }))}
+                className="bg-white/10 border-white/20 text-white"
+                placeholder="Введите имя"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-300 mb-2 block">Курс</label>
+              <Select 
+                value={editingData.course} 
+                onValueChange={(value) => setEditingData(prev => ({ ...prev, course: value }))}
+              >
+                <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                  <SelectValue placeholder="Выберите курс" />
+                </SelectTrigger>
+                <SelectContent className="bg-white border border-gray-200 rounded-xl">
+                  {['1', '2', '3', '4', '5', '6'].map(course => (
+                    <SelectItem key={course} value={course} className="text-gray-900 focus:bg-purple-50">{course} курс</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-300 mb-2 block">Направление</label>
+              <Input
+                value={editingData.direction}
+                onChange={(e) => setEditingData(prev => ({ ...prev, direction: e.target.value }))}
+                className="bg-white/10 border-white/20 text-white"
+                placeholder="Например: Информатика"
+              />
+            </div>
+            <div>
+              <label className="text-sm font-medium text-gray-300 mb-2 block">О себе</label>
+              <Textarea
+                value={editingData.bio}
+                onChange={(e) => setEditingData(prev => ({ ...prev, bio: e.target.value }))}
+                className="bg-white/10 border-white/20 text-white min-h-[100px]"
+                placeholder="Расскажите о себе"
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex flex-col gap-3">
+            <Button
+              onClick={handleSaveProfile}
+              className="w-full bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 text-white"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Сохранить
+            </Button>
+            <Button
+              onClick={() => setEditProfileOpen(false)}
+              variant="outline"
+              className="w-full bg-white/10 border-white/20 text-white hover:bg-white/20"
+            >
+              <X className="w-4 h-4 mr-2" />
+              Отмена
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Link Dialog */}
+      <Dialog open={editLinkOpen} onOpenChange={setEditLinkOpen}>
+        <DialogContent className="bg-gradient-to-br from-black/95 to-violet-900/30 backdrop-blur-md border-2 border-violet-500/30 text-white w-[90%] max-w-[500px] rounded-[25px]" hideClose>
+          <button
+            onClick={() => setEditLinkOpen(false)}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-white/10 rounded-full transition-colors z-50"
+          >
+            <X className="w-5 h-5 font-bold" strokeWidth={3} />
+          </button>
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-[#a855f7]">
+              {currentEditLink === 'telegram' ? 'Telegram' : currentEditLink === 'vk' ? 'VKontakte' : 'Instagram'}
+            </DialogTitle>
+            <DialogDescription className="text-gray-400">
+              Добавьте ссылку на ваш профиль в социальной сети
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div>
+              <label className="text-sm font-medium text-gray-300 mb-2 block flex items-center gap-2">
+                <LinkIcon className="w-4 h-4" />
+                Ссылка на профиль
+              </label>
+              <Input
+                value={linkValue}
+                onChange={(e) => setLinkValue(e.target.value)}
+                className="bg-white/10 border-white/20 text-white"
+                placeholder="https://..."
+              />
+            </div>
+          </div>
+          <DialogFooter className="flex flex-col gap-3">
+            <Button
+              onClick={handleSaveLink}
+              className="w-full bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 text-white"
+            >
+              <Save className="w-4 h-4 mr-2" />
+              Сохранить
+            </Button>
+            <Button
+              onClick={() => setEditLinkOpen(false)}
+              variant="outline"
+              className="w-full bg-white/10 border-white/20 text-white hover:bg-white/20"
+            >
+              <X className="w-4 h-4 mr-2" />
+              Отмена
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Coming Soon Dialog */}
+      <Dialog open={comingSoonOpen} onOpenChange={setComingSoonOpen}>
+        <DialogContent className="bg-gradient-to-br from-black/95 to-violet-900/30 backdrop-blur-md border-2 border-violet-500/30 text-white w-[90%] max-w-[400px] rounded-[25px]" hideClose>
+          <button
+            onClick={() => setComingSoonOpen(false)}
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-white/10 rounded-full transition-colors z-50"
+          >
+            <X className="w-5 h-5 font-bold" strokeWidth={3} />
+          </button>
+          <div className="flex flex-col items-center text-center py-6">
+            <div className="w-20 h-20 bg-gradient-to-br from-violet-500/20 to-cyan-500/20 rounded-full flex items-center justify-center mb-4 border-2 border-violet-500/30">
+              <Camera className="w-10 h-10 text-violet-400" />
+            </div>
+            <DialogHeader>
+              <DialogTitle className="text-2xl font-bold bg-gradient-to-r from-violet-400 to-cyan-400 bg-clip-text text-transparent">
+                Скоро!
+              </DialogTitle>
+              <DialogDescription className="text-gray-300 mt-3 text-base leading-relaxed">
+                Загрузка и редактирование фотографий появится в следующем обновлении. Мы активно работаем над этой функцией! 📸
+              </DialogDescription>
+            </DialogHeader>
+            <Button
+              onClick={() => setComingSoonOpen(false)}
+              className="mt-6 bg-gradient-to-r from-violet-500 to-cyan-500 hover:from-violet-600 hover:to-cyan-600 text-white px-8"
+            >
+              Понятно
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -266,11 +671,17 @@ function Section({ title, children, locked }: { title: string, children: React.R
   );
 }
 
-function SocialButton({ icon, label }: { icon: React.ReactNode, label: string }) {
+function SocialButton({ icon, label, onClick, hasLink }: { 
+  icon: React.ReactNode, 
+  label: string,
+  onClick?: () => void,
+  hasLink?: boolean
+}) {
   return (
     <motion.div
-      whileHover={{ boxShadow: "0 0 15px rgba(177, 0, 255, 0.6)" }}
-      className="flex flex-col items-center justify-center w-24 h-24 bg-black/40 rounded-xl transition-all"
+      whileHover={{ boxShadow: "0 0 15px rgba(177, 0, 255, 0.6)", scale: 1.05 }}
+      onClick={onClick}
+      className="relative flex flex-col items-center justify-center w-24 h-24 bg-black/40 rounded-xl transition-all cursor-pointer"
       data-testid={`social-${label.toLowerCase()}`}
     >
       <div className="mb-2">{icon}</div>

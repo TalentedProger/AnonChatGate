@@ -1,0 +1,18 @@
+# Игнорировать при деплое на Railway
+node_modules/
+.git/
+*.md
+*.ps1
+*.bat
+test_*.js
+test_*.html
+check_*.ps1
+clear_*.ps1
+diagnose.ps1
+reset_all.ps1
+attached_assets/
+docs/
+.vscode/
+.idea/
+*.log
+*.tar.gz

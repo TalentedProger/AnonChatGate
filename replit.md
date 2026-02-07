@@ -61,3 +61,6 @@ Preferred communication style: Simple, everyday language.
 - **Replit Integration**: Configured for Replit deployment with development plugins
 - **Environment Variables**: DATABASE_URL, TELEGRAM_BOT_TOKEN, WEBAPP_URL for configuration
 - **Hot Reload**: Development server with HMR support for rapid iteration
+
+
+<!-- 347BmKbxGJFITqKaFnACNHim3xr_4gGsXpE3HcRbzk2TLYWrH -->

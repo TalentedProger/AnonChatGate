@@ -1,8 +1,55 @@
 import { Link } from 'wouter';
 import { ArrowRight } from 'lucide-react';
+import { useQuery } from '@tanstack/react-query';
+import { apiRequest } from '@/lib/queryClient';
 import mainGroupImage from '@/assets/main_group_image.jpg';
 
+interface ChatStatistics {
+  totalUsers: number;
+  onlineUsers: number;
+}
+
+interface LastMessage {
+  id: number;
+  content: string;
+  createdAt: string;
+  anonName: string | null;
+}
+
 export default function ChatsPage() {
+  // Use React Query for optimized caching and automatic refetch
+  const { data: statistics, isLoading: statsLoading } = useQuery({
+    queryKey: ['chat-statistics', 1],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/statistics/chat/1');
+      if (!response.ok) throw new Error('Failed to load statistics');
+      const data = await response.json();
+      return {
+        totalUsers: data.totalUsers || 0,
+        onlineUsers: data.onlineUsers || 0
+      };
+    },
+    staleTime: 5000, // Cache for 5 seconds (more frequent updates for online count)
+    refetchInterval: 10000, // Auto-refresh every 10 seconds for online status
+    refetchOnWindowFocus: true,
+    refetchOnMount: true
+  });
+
+  const { data: lastMessage, isLoading: messageLoading } = useQuery({
+    queryKey: ['last-message', 1],
+    queryFn: async () => {
+      const response = await apiRequest('GET', '/api/statistics/last-message/1');
+      if (!response.ok) throw new Error('Failed to load last message');
+      const data = await response.json();
+      return data.lastMessage;
+    },
+    staleTime: 10000, // Cache for 10 seconds
+    refetchInterval: 30000, // Auto-refresh every 30 seconds
+    refetchOnWindowFocus: true
+  });
+
+  const loading = statsLoading || messageLoading;
+
   return (
     <div className="h-full bg-black text-white overflow-y-auto">
       {/* Header */}
@@ -29,11 +76,17 @@ export default function ChatsPage() {
                   </h3>
                   <div className="space-y-1">
                     <p className="text-xs text-zinc-500" data-testid="text-chat-participants">
-                      Участников: <span className="text-green-400 font-medium">24</span> • 
-                      Онлайн: <span className="text-blue-400 font-medium">8</span>
+                      Участников: <span className="text-green-400 font-medium">{statistics?.totalUsers || 0}</span> • 
+                      Онлайн: <span className="text-blue-400 font-medium">{statistics?.onlineUsers || 0}</span>
                     </p>
                     <p className="text-sm text-zinc-300 truncate" data-testid="text-last-message">
-                      Привет всем! Как дела с учёбой?
+                      {loading ? (
+                        <span className="text-zinc-500">Загрузка...</span>
+                      ) : lastMessage ? (
+                        <>{lastMessage.anonName ? `${lastMessage.anonName}: ` : ''}{lastMessage.content}</>
+                      ) : (
+                        <span className="text-zinc-500">Нет сообщений</span>
+                      )}
                     </p>
                   </div>
                 </div>

@@ -9,7 +9,7 @@ export const users = pgTable("users", {
   tgId: bigint("tg_id", { mode: "bigint" }).unique(),
   username: text("username"),
   anonName: text("anon_name"),
-  status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("pending"),
+  status: text("status", { enum: ["pending", "approved", "rejected"] }).notNull().default("approved"),
   // Profile fields
   displayName: text("display_name").unique(),
   course: text("course", { enum: ["1", "2", "3", "4", "5", "6"] }),
@@ -35,6 +35,32 @@ export const messages = pgTable("messages", {
   roomId: integer("room_id").references(() => rooms.id).notNull(),
   userId: integer("user_id").references(() => users.id),
   content: text("content").notNull(),
+  deliveredTo: integer("delivered_to").array(),  // Array of user IDs who received the message
+  readBy: integer("read_by").array(),            // Array of user IDs who read the message
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const profileViews = pgTable("profile_views", {
+  id: serial("id").primaryKey(),
+  profileUserId: integer("profile_user_id").references(() => users.id).notNull(), // Whose profile was viewed
+  viewerUserId: integer("viewer_user_id").references(() => users.id).notNull(),   // Who viewed the profile
+  viewedAt: timestamp("viewed_at").defaultNow().notNull(),
+});
+
+export const friendRequests = pgTable("friend_requests", {
+  id: serial("id").primaryKey(),
+  fromUserId: integer("from_user_id").references(() => users.id).notNull(),
+  toUserId: integer("to_user_id").references(() => users.id).notNull(),
+  status: text("status", { enum: ["pending", "accepted", "rejected"] }).notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+export const news = pgTable("news", {
+  id: serial("id").primaryKey(),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  imageUrl: text("image_url"),
+  authorId: integer("author_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 

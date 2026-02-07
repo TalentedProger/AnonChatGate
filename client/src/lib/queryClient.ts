@@ -8,31 +8,51 @@ async function throwIfResNotOk(res: Response) {
   }
 }
 
+/**
+ * Make an API request with authentication
+ * Note: Does NOT throw on non-2xx responses - caller should check response.ok
+ * This allows proper handling of expected error cases like 401 Unauthorized
+ */
 export async function apiRequest(
   method: string,
   url: string,
   data?: unknown | undefined,
+  isFormData?: boolean,
 ): Promise<Response> {
   // Get authentication token
   const token = await authManager.getValidToken();
   
   // Build headers
   const headers: Record<string, string> = {};
-  if (data) {
+  
+  // Only set Content-Type for JSON, let browser set it for FormData
+  if (data && !isFormData && !(data instanceof FormData)) {
     headers["Content-Type"] = "application/json";
   }
+  
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
+  }
+
+  // Prepare body based on data type
+  let body: string | FormData | undefined;
+  if (data) {
+    if (data instanceof FormData || isFormData) {
+      body = data as FormData;
+    } else {
+      body = JSON.stringify(data);
+    }
   }
 
   const res = await fetch(url, {
     method,
     headers,
-    body: data ? JSON.stringify(data) : undefined,
+    body,
     credentials: "include",
   });
 
-  await throwIfResNotOk(res);
+  // Don't throw here - let the caller handle the response
+  // This allows proper handling of 401 and other expected error responses
   return res;
 }
 

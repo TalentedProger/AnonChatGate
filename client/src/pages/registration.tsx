@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { logger } from '@/lib/logger';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -20,14 +21,15 @@ interface RegistrationData {
   telegram: string;
   instagram: string;
   vk: string;
-  photos: File[];
+  avatarUrl: string;
+  photoUrls: string[];
 }
 
-// Unified field styles for consistent appearance
-const fieldBaseClasses = "w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50";
-const textareaClasses = "w-full h-[108px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 py-3 resize-none placeholder:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50";
-const selectTriggerClasses = "w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 data-[placeholder]:text-white/50 focus:outline-none focus:ring-2 focus:ring-blue-500/50";
-const fileInputClasses = "w-full h-[54px] rounded-2xl border-none bg-white/12 text-white text-[15px] px-4 focus:outline-none focus:ring-2 focus:ring-blue-500/50 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-white/20 file:text-white hover:file:bg-white/30 file:transition-colors";
+// Unified field styles - компактные и современные
+const fieldBaseClasses = "w-full h-[48px] rounded-xl border-none bg-white/95 text-gray-900 text-[14px] px-3.5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 box-border transition-all";
+const textareaClasses = "w-full h-[90px] rounded-xl border-none bg-white/95 text-gray-900 text-[14px] px-3.5 py-2.5 resize-none placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 box-border transition-all";
+const selectTriggerClasses = "w-full h-[48px] rounded-xl border-none bg-white/95 text-gray-900 text-[14px] px-3.5 data-[placeholder]:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 box-border transition-all";
+const fileInputClasses = "w-full h-[48px] rounded-xl border-none bg-white/95 text-gray-900 text-[13px] px-3 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#5800EF] file:text-white hover:file:bg-[#4A00CC] file:transition-colors cursor-pointer box-border";
 
 export default function RegistrationPage() {
   const [, setLocation] = useLocation();
@@ -43,44 +45,25 @@ export default function RegistrationPage() {
     telegram: '',
     instagram: '',
     vk: '',
-    photos: []
+    avatarUrl: '',
+    photoUrls: []
   });
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isCheckingUsername, setIsCheckingUsername] = useState(false);
-  const [isAuthenticating, setIsAuthenticating] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState<string>('');
 
-  // Auto-authenticate in development mode
+  // Log auth status on mount
   useEffect(() => {
-    const authenticateForDev = async () => {
-      // Only auto-authenticate in development if not already authenticated
-      if (import.meta.env.DEV && !auth.isAuthenticated() && !isAuthenticating) {
-        setIsAuthenticating(true);
-        try {
-          const response = await fetch('/api/auth/dev', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({})
-          });
-          
-          if (response.ok) {
-            const authData = await response.json();
-            auth.setAuthData(authData);
-            console.log('[DEV] Auto-authenticated for registration');
-          } else {
-            console.error('[DEV] Auto-authentication failed:', await response.text());
-          }
-        } catch (error) {
-          console.error('[DEV] Auto-authentication error:', error);
-        } finally {
-          setIsAuthenticating(false);
-        }
-      }
-    };
-
-    authenticateForDev();
-  }, [auth, isAuthenticating]);
+    logger.log('[Registration] Component mounted');
+    logger.log('[Registration] Auth status:', {
+      hasUser: !!auth.user,
+      hasToken: !!auth.token,
+      user: auth.user?.anonName
+    });
+  }, []);
 
   const updateFormData = (field: keyof RegistrationData, value: any) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -144,7 +127,7 @@ export default function RegistrationPage() {
       const data = await response.json();
       return data.available;
     } catch (error) {
-      console.error('Username check failed:', error);
+      logger.error('Username check failed:', error);
       return false;
     }
   };
@@ -170,15 +153,90 @@ export default function RegistrationPage() {
     setIsCheckingUsername(false);
   };
 
+  const handleFileUpload = async (file: File, type: 'avatar' | 'photo'): Promise<string | null> => {
+    try {
+      setIsUploading(true);
+      setUploadProgress(`Загрузка ${type === 'avatar' ? 'аватара' : 'фото'}...`);
+
+      const formData = new FormData();
+      if (type === 'avatar') {
+        formData.append('image', file);
+      } else {
+        formData.append('images', file);
+      }
+
+      const endpoint = type === 'avatar' ? '/api/upload/image' : '/api/upload/images';
+      const response = await apiRequest('POST', endpoint, formData, true); // true for FormData
+
+      if (response.ok) {
+        const data = await response.json();
+        setUploadProgress('');
+        return type === 'avatar' ? data.url : (data.urls && data.urls[0]) || null;
+      } else {
+        throw new Error('Upload failed');
+      }
+    } catch (error) {
+      logger.error('File upload error:', error);
+      setErrors(prev => ({ ...prev, upload: 'Не удалось загрузить файл' }));
+      return null;
+    } finally {
+      setIsUploading(false);
+      setUploadProgress('');
+    }
+  };
+
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, avatar: 'Файл слишком большой. Максимум 5MB' }));
+      return;
+    }
+
+    const url = await handleFileUpload(file, 'avatar');
+    if (url) {
+      updateFormData('avatarUrl', url);
+    }
+  };
+
+  const handlePhotoChange = async (e: React.ChangeEvent<HTMLInputElement>, index: number) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // Validate file size (5MB)
+    if (file.size > 5 * 1024 * 1024) {
+      setErrors(prev => ({ ...prev, [`photo${index}`]: 'Файл слишком большой. Максимум 5MB' }));
+      return;
+    }
+
+    const url = await handleFileUpload(file, 'photo');
+    if (url) {
+      const newPhotoUrls = [...formData.photoUrls];
+      newPhotoUrls[index] = url;
+      updateFormData('photoUrls', newPhotoUrls);
+    }
+  };
+
   const handleSubmit = async () => {
-    if (!validateStep(1)) return;
+    // Validate step 1 data (required fields)
+    if (!validateStep(1)) {
+      // If validation fails, go back to step 1
+      setCurrentStep(1);
+      setIsSubmitting(false);
+      return;
+    }
 
     setIsSubmitting(true);
     try {
+      logger.log('[Registration] Starting submission...');
+      
       // Check username uniqueness first
       const isAvailable = await checkUsernameAvailability(formData.displayName);
       if (!isAvailable) {
         setErrors({ displayName: 'Имя пользователя уже занято' });
+        setCurrentStep(1); // Go back to step 1
         setIsSubmitting(false);
         return;
       }
@@ -189,7 +247,7 @@ export default function RegistrationPage() {
       if (formData.instagram.trim()) socialLinks.push(formData.instagram);
       if (formData.vk.trim()) socialLinks.push(formData.vk);
 
-      // For now, we'll submit the basic profile data
+      // Build profile data with uploaded images
       const profileData = {
         displayName: formData.displayName.toLowerCase(), // Store as lowercase for consistency
         gender: formData.gender,
@@ -197,16 +255,37 @@ export default function RegistrationPage() {
         direction: formData.direction,
         bio: formData.bio || '',
         socialLinks,
-        photos: [] // Will be implemented later with image upload
+        avatarUrl: formData.avatarUrl || '',
+        photos: formData.photoUrls.filter(url => url.trim() !== '')
       };
 
+      logger.log('[Registration] Sending profile data:', profileData);
       const response = await apiRequest('PATCH', '/api/profile', profileData);
 
       if (response.ok) {
-        setLocation('/');
+        logger.log('[Registration] Success! Redirecting to home...');
+        const data = await response.json();
+        logger.log('[Registration] Profile created:', data);
+        
+        // Small delay to ensure state is saved
+        setTimeout(() => {
+          setLocation('/');
+        }, 100);
       } else {
         const errorData = await response.json();
-        console.error('Profile update failed:', errorData);
+        logger.error('[Registration] Profile update failed:', errorData);
+        
+        // Check if it's an authentication error
+        if (response.status === 401) {
+          logger.error('[Registration] Auth token expired or invalid');
+          auth.clearAuth();
+          setErrors({ submit: 'Сессия истекла. Пожалуйста, начните заново.' });
+          setTimeout(() => {
+            setLocation('/entry');
+          }, 2000);
+          return;
+        }
+        
         if (errorData.details) {
           const validationErrors: Record<string, string> = {};
           errorData.details.forEach((issue: any) => {
@@ -215,10 +294,19 @@ export default function RegistrationPage() {
             }
           });
           setErrors(validationErrors);
+          setCurrentStep(1); // Go back to first step with errors
+        } else {
+          // Show generic error
+          setErrors({ submit: errorData.error || errorData.message || 'Не удалось создать профиль' });
         }
       }
     } catch (error) {
-      console.error('Registration error:', error);
+      logger.error('[Registration] Registration error:', error);
+      if (error instanceof TypeError && error.message.includes('fetch')) {
+        setErrors({ submit: 'Ошибка соединения с сервером. Проверьте подключение к интернету.' });
+      } else {
+        setErrors({ submit: 'Произошла ошибка. Попробуйте снова.' });
+      }
     } finally {
       setIsSubmitting(false);
     }
@@ -234,51 +322,51 @@ export default function RegistrationPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex items-center justify-center px-6 py-6">
-      <div className="w-full max-w-[428px] h-[926px] rounded-3xl flex items-center justify-center px-7 py-7 box-border">
-        <div className="w-full max-w-[380px] rounded-[28px] px-5 py-5 pb-7 box-border bg-white/8 backdrop-blur-[18px] shadow-[0_12px_30px_rgba(2,6,23,0.18)] flex flex-col relative">
+    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex items-center justify-center px-5 py-6">
+      <div className="w-full max-w-[428px] min-h-[926px] rounded-3xl flex items-center justify-center px-6 py-6 box-border">
+        <div className="w-full max-w-[390px] rounded-3xl px-6 py-6 box-border bg-white/8 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] flex flex-col relative border border-white/10">
           {/* Back button */}
           <button
             type="button"
             onClick={prevStep}
-            className="absolute top-4 left-4 w-9 h-9 rounded-full border-none bg-white/20 text-white flex items-center justify-center cursor-pointer text-lg leading-none hover:bg-white/30 transition-colors"
+            className="absolute top-5 left-5 w-8 h-8 rounded-full border-none bg-white/15 text-white flex items-center justify-center cursor-pointer text-base leading-none hover:bg-white/25 transition-all backdrop-blur-sm"
             style={{ display: currentStep === 1 ? 'none' : 'flex' }}
           >
             ←
           </button>
 
           {/* Logo */}
-          <div className="w-[92px] h-[34px] flex items-center justify-center mx-auto mt-1.5 mb-2.5">
-            <svg width="92" height="34" viewBox="0 0 120 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <text x="50%" y="60%" dominantBaseline="middle" textAnchor="middle" className="font-extrabold fill-white" fontSize="26" fontFamily="Raleway">AguGram</text>
+          <div className="w-20 h-8 flex items-center justify-center mx-auto mt-0 mb-3">
+            <svg width="80" height="32" viewBox="0 0 120 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <text x="50%" y="60%" dominantBaseline="middle" textAnchor="middle" style={{ fontFamily: 'Raleway', fontWeight: 800, fill: 'white' }} fontSize="24">AguGram</text>
             </svg>
           </div>
 
           {/* Title */}
-          <h1 className="text-[32px] leading-[1.05] font-extrabold text-center mt-1.5 bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] bg-clip-text text-transparent">
+          <h1 className="text-[28px] leading-[1.1] font-extrabold text-center mt-0 mb-1 bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] bg-clip-text text-transparent" style={{ fontFamily: 'Raleway' }}>
             Создать аккаунт
           </h1>
-          <div className="text-sm text-gray-300 text-center mt-1.5 font-semibold">{getStepTitle()}</div>
+          <div className="text-[13px] text-gray-300 text-center mt-0 mb-4 font-medium" style={{ fontFamily: 'Raleway' }}>{getStepTitle()}</div>
 
           {/* Progress bar */}
-          <div className="flex gap-1.5 mt-3.5 mb-4.5">
+          <div className="flex gap-2 mt-0 mb-5">
             {[...Array(totalSteps)].map((_, i) => (
               <div
                 key={i}
-                className={`flex-1 h-1.5 rounded-md transition-all ${
+                className={`flex-1 h-1 rounded-full transition-all duration-300 ${
                   i < currentStep 
-                    ? 'bg-[#5800EF] shadow-[0_0_12px_rgba(88,0,239,0.9)]' 
-                    : 'bg-white/10 shadow-[0_0_8px_rgba(88,0,239,0.6)]'
+                    ? 'bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] shadow-[0_0_8px_rgba(88,0,239,0.6)]' 
+                    : 'bg-white/10'
                 }`}
               />
             ))}
           </div>
 
           {/* Form steps */}
-          <div className="flex flex-col gap-6 mt-1 relative overflow-hidden">
+          <div className="flex flex-col gap-3 mt-1 relative overflow-hidden">
             {/* Step 1: Personal Information */}
             <motion.div
-              className="flex flex-col gap-6"
+              className="flex flex-col gap-3"
               initial={{ opacity: 0, x: 20 }}
               animate={{ 
                 opacity: currentStep === 1 ? 1 : 0, 
@@ -290,8 +378,8 @@ export default function RegistrationPage() {
               style={{ display: currentStep === 1 ? 'flex' : 'none' }}
             >
               <div>
-                <Label htmlFor="displayName" className="text-white text-[15px] font-bold mb-2 block">
-                  Ваше имя:
+                <Label htmlFor="displayName" className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                  Ваше имя
                 </Label>
                 <Input
                   id="displayName"
@@ -303,53 +391,53 @@ export default function RegistrationPage() {
                   disabled={isCheckingUsername}
                 />
                 {errors.displayName && (
-                  <p className="text-red-400 text-sm mt-1">{errors.displayName}</p>
+                  <p className="text-red-400 text-xs mt-1">{errors.displayName}</p>
                 )}
                 {isCheckingUsername && (
-                  <p className="text-blue-400 text-sm mt-1">Проверяем доступность имени...</p>
+                  <p className="text-blue-400 text-xs mt-1">Проверка...</p>
                 )}
               </div>
 
-              <div className="mt-6">
-                <Label className="text-white text-[15px] font-bold mb-2 block">
-                  Ваш пол:
+              <div className="mt-2.5">
+                <Label className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                  Пол
                 </Label>
                 <Select value={formData.gender} onValueChange={(value) => updateFormData('gender', value)}>
                   <SelectTrigger className={selectTriggerClasses}>
-                    <SelectValue placeholder="Выберите пол" />
+                    <SelectValue placeholder="Выберите" />
                   </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="male">Мужской</SelectItem>
-                    <SelectItem value="female">Женский</SelectItem>
+                  <SelectContent className="bg-white border border-gray-200 rounded-xl">
+                    <SelectItem value="male" className="text-gray-900 focus:bg-purple-50">Мужской</SelectItem>
+                    <SelectItem value="female" className="text-gray-900 focus:bg-purple-50">Женский</SelectItem>
                   </SelectContent>
                 </Select>
                 {errors.gender && (
-                  <p className="text-red-400 text-sm mt-1">{errors.gender}</p>
+                  <p className="text-red-400 text-xs mt-1">{errors.gender}</p>
                 )}
               </div>
 
-              <div className="mt-6">
-                <Label className="text-white text-[15px] font-bold mb-2 block">
-                  Выберите курс:
+              <div className="mt-2.5">
+                <Label className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                  Курс
                 </Label>
                 <Select value={formData.course} onValueChange={(value) => updateFormData('course', value)}>
                   <SelectTrigger className={selectTriggerClasses}>
-                    <SelectValue placeholder="Выберите курс" />
+                    <SelectValue placeholder="Выберите" />
                   </SelectTrigger>
-                  <SelectContent>
+                  <SelectContent className="bg-white border border-gray-200 rounded-xl">
                     {['1', '2', '3', '4', '5', '6'].map(course => (
-                      <SelectItem key={course} value={course}>{course} курс</SelectItem>
+                      <SelectItem key={course} value={course} className="text-gray-900 focus:bg-purple-50">{course} курс</SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
                 {errors.course && (
-                  <p className="text-red-400 text-sm mt-1">{errors.course}</p>
+                  <p className="text-red-400 text-xs mt-1">{errors.course}</p>
                 )}
               </div>
 
-              <div className="mt-6">
-                <Label htmlFor="direction" className="text-white text-[15px] font-bold mb-2 block">
-                  Выберите направление:
+              <div className="mt-2.5">
+                <Label htmlFor="direction" className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                  Направление
                 </Label>
                 <Input
                   id="direction"
@@ -359,18 +447,18 @@ export default function RegistrationPage() {
                   onChange={(e) => updateFormData('direction', e.target.value)}
                 />
                 {errors.direction && (
-                  <p className="text-red-400 text-sm mt-1">{errors.direction}</p>
+                  <p className="text-red-400 text-xs mt-1">{errors.direction}</p>
                 )}
               </div>
 
-              <div className="mt-6">
-                <Label htmlFor="bio" className="text-white text-[15px] font-bold mb-2 block">
-                  О себе:
+              <div className="mt-2.5">
+                <Label htmlFor="bio" className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                  О себе (необязательно)
                 </Label>
                 <Textarea
                   id="bio"
                   className={textareaClasses}
-                  placeholder="Напишите немного о себе"
+                  placeholder="Расскажите о себе"
                   value={formData.bio}
                   onChange={(e) => updateFormData('bio', e.target.value)}
                 />
@@ -378,7 +466,8 @@ export default function RegistrationPage() {
 
               <Button
                 onClick={nextStep}
-                className="mt-4 w-full h-11 rounded-full font-bold text-white bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] border-none shadow-[0_8px_18px_rgba(68,47,255,0.12)] hover:opacity-90 transition-opacity"
+                className="mt-5 w-full h-11 rounded-xl font-semibold text-white bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] border-none hover:opacity-90 transition-all"
+                style={{ fontFamily: 'Raleway' }}
               >
                 Продолжить
               </Button>
@@ -386,7 +475,7 @@ export default function RegistrationPage() {
 
             {/* Step 2: Social Links */}
             <motion.div
-              className="flex flex-col gap-6"
+              className="flex flex-col gap-2.5"
               initial={{ opacity: 0, x: 20 }}
               animate={{ 
                 opacity: currentStep === 2 ? 1 : 0, 
@@ -398,8 +487,8 @@ export default function RegistrationPage() {
               style={{ display: currentStep === 2 ? 'flex' : 'none' }}
             >
               <div>
-                <Label htmlFor="telegram" className="text-white text-[15px] font-bold mb-2 block">
-                  Ссылка на Telegram:
+                <Label htmlFor="telegram" className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                  Telegram (необязательно)
                 </Label>
                 <Input
                   id="telegram"
@@ -410,9 +499,9 @@ export default function RegistrationPage() {
                 />
               </div>
 
-              <div className="mt-6">
-                <Label htmlFor="instagram" className="text-white text-[15px] font-bold mb-2 block">
-                  Ссылка на Instagram:
+              <div>
+                <Label htmlFor="instagram" className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                  Instagram (необязательно)
                 </Label>
                 <Input
                   id="instagram"
@@ -423,9 +512,9 @@ export default function RegistrationPage() {
                 />
               </div>
 
-              <div className="mt-6">
-                <Label htmlFor="vk" className="text-white text-[15px] font-bold mb-2 block">
-                  Ссылка на ВК:
+              <div>
+                <Label htmlFor="vk" className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                  ВКонтакте (необязательно)
                 </Label>
                 <Input
                   id="vk"
@@ -438,7 +527,8 @@ export default function RegistrationPage() {
 
               <Button
                 onClick={nextStep}
-                className="mt-4 w-full h-11 rounded-full font-bold text-white bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] border-none hover:opacity-90 transition-opacity"
+                className="mt-4 w-full h-11 rounded-xl font-semibold text-white bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] border-none hover:opacity-90 transition-all"
+                style={{ fontFamily: 'Raleway' }}
               >
                 Продолжить
               </Button>
@@ -446,7 +536,8 @@ export default function RegistrationPage() {
               <Button
                 onClick={nextStep}
                 variant="outline"
-                className="mt-3 w-full h-11 rounded-full font-semibold text-white bg-white/15 border-none hover:bg-white/25 transition-colors"
+                className="mt-2 w-full h-10 rounded-xl font-medium text-white bg-white/10 border-none hover:bg-white/20 transition-all"
+                style={{ fontFamily: 'Raleway' }}
               >
                 Пропустить
               </Button>
@@ -454,7 +545,7 @@ export default function RegistrationPage() {
 
             {/* Step 3: Photos */}
             <motion.div
-              className="flex flex-col gap-6"
+              className="flex flex-col gap-2.5"
               initial={{ opacity: 0, x: 20 }}
               animate={{ 
                 opacity: currentStep === 3 ? 1 : 0, 
@@ -465,34 +556,109 @@ export default function RegistrationPage() {
               transition={{ duration: 0.4, ease: 'easeInOut' }}
               style={{ display: currentStep === 3 ? 'flex' : 'none' }}
             >
-              {[1, 2, 3].map((photoIndex) => (
-                <div key={photoIndex} className="mt-6">
-                  <Label className="text-white text-[15px] font-bold mb-2 block">
-                    Добавьте фото в профиль:
-                  </Label>
+              {/* Avatar upload */}
+              <div>
+                <Label className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                  Аватар (необязательно)
+                </Label>
+                {formData.avatarUrl ? (
+                  <div className="relative w-full h-28 rounded-xl overflow-hidden bg-white/10">
+                    <img 
+                      src={formData.avatarUrl} 
+                      alt="Avatar preview" 
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => updateFormData('avatarUrl', '')}
+                      className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-red-500/90 text-white flex items-center justify-center hover:bg-red-600 transition-all backdrop-blur-sm"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                ) : (
                   <Input
                     type="file"
                     accept="image/*"
+                    onChange={handleAvatarChange}
+                    disabled={isUploading}
                     className={fileInputClasses}
                   />
+                )}
+                {errors.avatar && (
+                  <p className="text-red-400 text-xs mt-1">{errors.avatar}</p>
+                )}
+              </div>
+
+              {/* Photo uploads */}
+              {[0, 1, 2].map((photoIndex) => (
+                <div key={photoIndex}>
+                  <Label className="text-white text-[13px] font-semibold mb-1.5 block" style={{ fontFamily: 'Raleway' }}>
+                    Фото {photoIndex + 1} (необязательно)
+                  </Label>
+                  {formData.photoUrls[photoIndex] ? (
+                    <div className="relative w-full h-28 rounded-xl overflow-hidden bg-white/10">
+                      <img 
+                        src={formData.photoUrls[photoIndex]} 
+                        alt={`Photo ${photoIndex + 1} preview`} 
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const newUrls = [...formData.photoUrls];
+                          newUrls[photoIndex] = '';
+                          updateFormData('photoUrls', newUrls);
+                        }}
+                        className="absolute top-1.5 right-1.5 w-7 h-7 rounded-full bg-red-500/90 text-white flex items-center justify-center hover:bg-red-600 transition-all backdrop-blur-sm"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  ) : (
+                    <Input
+                      type="file"
+                      accept="image/*"
+                      onChange={(e) => handlePhotoChange(e, photoIndex)}
+                      disabled={isUploading}
+                      className={fileInputClasses}
+                    />
+                  )}
+                  {errors[`photo${photoIndex}`] && (
+                    <p className="text-red-400 text-xs mt-1">{errors[`photo${photoIndex}`]}</p>
+                  )}
                 </div>
               ))}
 
+              {uploadProgress && (
+                <p className="text-blue-400 text-xs text-center mt-2">{uploadProgress}</p>
+              )}
+
+              {errors.upload && (
+                <p className="text-red-400 text-xs text-center mt-2">{errors.upload}</p>
+              )}
+
+              {errors.submit && (
+                <p className="text-red-400 text-xs text-center mt-2 font-medium">{errors.submit}</p>
+              )}
+
               <Button
                 onClick={handleSubmit}
-                disabled={isSubmitting}
-                className="mt-4 w-full h-11 rounded-full font-bold text-white bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] border-none hover:opacity-90 transition-opacity disabled:opacity-50"
+                disabled={isSubmitting || isUploading}
+                className="mt-4 w-full h-11 rounded-xl font-semibold text-white bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] border-none hover:opacity-90 transition-all disabled:opacity-50"
+                style={{ fontFamily: 'Raleway' }}
               >
                 {isSubmitting ? 'Создание...' : 'Создать аккаунт'}
               </Button>
 
               <Button
                 onClick={handleSubmit}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isUploading}
                 variant="outline"
-                className="mt-3 w-full h-11 rounded-full font-semibold text-white bg-white/15 border-none hover:bg-white/25 transition-colors disabled:opacity-50"
+                className="mt-2 w-full h-10 rounded-xl font-medium text-white bg-white/10 border-none hover:bg-white/20 transition-all disabled:opacity-50"
+                style={{ fontFamily: 'Raleway' }}
               >
-                Пропустить
+                {isSubmitting ? 'Создание...' : 'Пропустить'}
               </Button>
             </motion.div>
           </div>

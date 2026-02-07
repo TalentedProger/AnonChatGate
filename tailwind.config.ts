@@ -13,6 +13,14 @@ export default {
       colors: {
         background: "var(--background)",
         foreground: "var(--foreground)",
+        // AguGram brand colors
+        agugram: {
+          'bg-start': '#0A1A2F',
+          'bg-end': '#000000',
+          'accent-purple': '#C42DFF',
+          'accent-blue': '#4A90FF',
+          'primary': '#5800EF',
+        },
         card: {
           DEFAULT: "var(--card)",
           foreground: "var(--card-foreground)",
@@ -66,6 +74,7 @@ export default {
         sans: ["var(--font-sans)"],
         serif: ["var(--font-serif)"],
         mono: ["var(--font-mono)"],
+        raleway: ['Raleway', 'sans-serif'],
       },
       keyframes: {
         "accordion-down": {

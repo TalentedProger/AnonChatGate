@@ -2,14 +2,13 @@ import { Pool, neonConfig } from '@neondatabase/serverless';
 import { drizzle } from 'drizzle-orm/neon-serverless';
 import ws from "ws";
 import * as schema from "@shared/schema";
+import dotenv from 'dotenv';
 
-// Configure WebSocket and SSL for development
+// Load environment variables
+dotenv.config();
+
+// Configure WebSocket for Neon serverless
 neonConfig.webSocketConstructor = ws;
-
-// Disable SSL verification in development to handle self-signed certificate issues
-if (process.env.NODE_ENV === 'development') {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
 
 if (!process.env.DATABASE_URL) {
   throw new Error(

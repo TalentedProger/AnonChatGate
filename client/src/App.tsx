@@ -8,82 +8,118 @@ import HomePage from "@/pages/home";
 import ChatsPage from "@/pages/chats";
 import ChatPage from "@/pages/chat";
 import ProfilePage from "@/pages/profile";
+import UserProfilePage from "@/pages/user-profile";
 import EntryPage from "@/pages/entry";
 import RegistrationPage from "@/pages/registration";
 import NotFoundPage from "@/pages/not-found";
 import { useAuth } from "@/lib/auth";
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect } from "react";
+import { initializeTelegramWebApp } from "@/lib/telegram";
 
-function AuthWrapper({ children }: { children: React.ReactNode }) {
+// Initialize Telegram WebApp as early as possible (before React renders)
+// This ensures fullscreen mode is activated immediately
+initializeTelegramWebApp();
+
+function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const auth = useAuth();
   const [location, setLocation] = useLocation();
 
   useEffect(() => {
-    // In dev mode, auto-authenticate with dev user for now
-    if (import.meta.env.DEV && !auth.user) {
-      auth.setAuthData({
-        user: {
-          id: 999999,
-          anonName: 'Student_999999',
-          status: 'approved',
-          createdAt: new Date().toISOString()
-        },
-        status: 'approved',
-        token: 'dev_token',
-        refreshToken: 'dev_refresh_token'
-      });
+    // Redirect to entry if not authenticated
+    if (!auth.user || !auth.token) {
+      console.log('[ProtectedRoute] Not authenticated, redirecting to entry');
+      setLocation('/entry');
     }
-  }, []);
+  }, [auth.user, auth.token, setLocation]);
 
-  // Show entry page for users without profiles in production
-  if (!import.meta.env.DEV && !auth.user && !location.startsWith('/entry') && !location.startsWith('/register')) {
-    setLocation('/entry');
+  // Don't render if not authenticated
+  if (!auth.user || !auth.token) {
     return null;
   }
 
   return <>{children}</>;
 }
 
+function InitialRedirect() {
+  const [location, setLocation] = useLocation();
+  const auth = useAuth();
+
+  useEffect(() => {
+    // Only redirect from root path
+    if (location === '/') {
+      // If not authenticated, go to entry
+      if (!auth.user || !auth.token) {
+        console.log('[InitialRedirect] Not authenticated, redirecting to entry');
+        setLocation('/entry');
+      }
+      // If authenticated, stay on home page (it's protected anyway)
+    }
+  }, [location, auth.user, auth.token, setLocation]);
+
+  return null;
+}
+
 function Router() {
   return (
-    <AuthWrapper>
+    <>
+      <InitialRedirect />
       <Switch>
-        {/* Full-screen routes without layout */}
+        {/* Public routes */}
         <Route path="/entry" component={EntryPage} />
         <Route path="/register" component={RegistrationPage} />
         
-        {/* Main app routes with layout */}
-        <Route path="/">
-          <Layout>
-            <HomePage />
-          </Layout>
-        </Route>
+        {/* Protected routes with layout */}
         <Route path="/chats">
-          <Layout>
-            <ChatsPage />
-          </Layout>
+          <ProtectedRoute>
+            <Layout>
+              <ChatsPage />
+            </Layout>
+          </ProtectedRoute>
         </Route>
         <Route path="/chat">
-          <Layout>
-            <ChatPage />
-          </Layout>
+          <ProtectedRoute>
+            <Layout>
+              <ChatPage />
+            </Layout>
+          </ProtectedRoute>
         </Route>
         <Route path="/profile">
-          <Layout>
-            <ProfilePage />
-          </Layout>
+          <ProtectedRoute>
+            <Layout>
+              <ProfilePage />
+            </Layout>
+          </ProtectedRoute>
+        </Route>
+        <Route path="/user/:userId">
+          <ProtectedRoute>
+            <UserProfilePage />
+          </ProtectedRoute>
+        </Route>
+        <Route path="/">
+          <ProtectedRoute>
+            <Layout>
+              <HomePage />
+            </Layout>
+          </ProtectedRoute>
         </Route>
         <Route path="*">
-          <Layout>
-            <NotFoundPage />
-          </Layout>
+          <ProtectedRoute>
+            <Layout>
+              <NotFoundPage />
+            </Layout>
+          </ProtectedRoute>
         </Route>
       </Switch>
-    </AuthWrapper>
+    </>
   );
 }
 
 function App() {
+  // Re-initialize on mount to ensure fullscreen is active
+  useLayoutEffect(() => {
+    initializeTelegramWebApp();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>

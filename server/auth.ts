@@ -1,4 +1,5 @@
 import jwt from 'jsonwebtoken';
+import { logger, logAuth } from './logger';
 
 interface TokenPayload {
   userId: number;
@@ -19,7 +20,7 @@ function getJwtSecret(): string {
   
   // Critical production check - fail fast if no secret in production
   if (process.env.NODE_ENV === 'production' && !secret) {
-    console.error('FATAL: JWT_SECRET is required in production environment');
+    logger.error('FATAL: JWT_SECRET is required in production environment');
     process.exit(1);
   }
   
@@ -37,6 +38,8 @@ export function generateAuthToken(user: AuthUser): string {
     iat: Math.floor(Date.now() / 1000),
   };
   
+  logger.debug({ userId: user.id }, 'Generating auth token');
+  
   // Short-lived tokens for WebSocket auth (15 minutes)
   return jwt.sign(payload, secret, { expiresIn: '15m' });
 }
@@ -52,6 +55,8 @@ export function generateRefreshToken(user: AuthUser): string {
     iat: Math.floor(Date.now() / 1000),
   };
   
+  logger.debug({ userId: user.id }, 'Generating refresh token');
+  
   // Longer-lived refresh tokens (7 days)
   return jwt.sign(payload, secret, { expiresIn: '7d' });
 }
@@ -62,8 +67,11 @@ export function verifyAuthToken(token: string): { userId: number; anonName: stri
     const decoded = jwt.verify(token, secret) as TokenPayload;
     
     if (!decoded || !decoded.userId || !decoded.status) {
+      logger.debug('Token verification failed: invalid token structure');
       return null;
     }
+    
+    logAuth('verify_token', decoded.userId, true);
     
     return {
       userId: decoded.userId,
@@ -71,7 +79,9 @@ export function verifyAuthToken(token: string): { userId: number; anonName: stri
       status: decoded.status
     };
   } catch (error) {
-    console.error('Token verification error:', error);
+    if (error instanceof Error) {
+      logger.debug({ error: error.message }, 'Token verification failed');
+    }
     return null;
   }
 }
@@ -82,8 +92,11 @@ export function verifyRefreshToken(token: string): { userId: number; anonName: s
     const decoded = jwt.verify(token, secret) as any;
     
     if (!decoded || !decoded.userId || !decoded.status || decoded.type !== 'refresh') {
+      logger.debug('Refresh token verification failed: invalid token structure');
       return null;
     }
+    
+    logAuth('verify_refresh_token', decoded.userId, true);
     
     return {
       userId: decoded.userId,
@@ -91,7 +104,9 @@ export function verifyRefreshToken(token: string): { userId: number; anonName: s
       status: decoded.status
     };
   } catch (error) {
-    console.error('Refresh token verification error:', error);
+    if (error instanceof Error) {
+      logger.debug({ error: error.message }, 'Refresh token verification failed');
+    }
     return null;
   }
 }
