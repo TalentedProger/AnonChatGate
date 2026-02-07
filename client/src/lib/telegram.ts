@@ -199,6 +199,33 @@ export function initializeTelegramWebApp(): boolean {
       `${webApp.viewportStableHeight || window.innerHeight}px`
     );
     
+    // 8.1. Set safe area top inset for content positioning
+    const safeTop = (webApp as any).safeAreaInset?.top || 0;
+    const contentSafeTop = (webApp as any).contentSafeAreaInset?.top || 0;
+    const totalSafeTop = safeTop + contentSafeTop;
+    document.documentElement.style.setProperty(
+      '--tg-safe-top',
+      `${totalSafeTop}px`
+    );
+    
+    // Listen for safe area changes
+    webApp.onEvent('safeAreaChanged' as any, () => {
+      const newSafeTop = (webApp as any).safeAreaInset?.top || 0;
+      const newContentSafeTop = (webApp as any).contentSafeAreaInset?.top || 0;
+      document.documentElement.style.setProperty(
+        '--tg-safe-top',
+        `${newSafeTop + newContentSafeTop}px`
+      );
+    });
+    webApp.onEvent('contentSafeAreaChanged' as any, () => {
+      const newSafeTop = (webApp as any).safeAreaInset?.top || 0;
+      const newContentSafeTop = (webApp as any).contentSafeAreaInset?.top || 0;
+      document.documentElement.style.setProperty(
+        '--tg-safe-top',
+        `${newSafeTop + newContentSafeTop}px`
+      );
+    });
+    
     // 9. Apply full viewport height to html and body
     document.documentElement.style.height = '100%';
     document.body.style.height = '100%';

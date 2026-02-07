@@ -330,12 +330,11 @@ export default function EntryPage() {
   const progress = sliderPosition / (getMaxPosition() || 1);
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex items-center justify-center px-4 py-4">
-      <div className="w-full max-w-[400px] flex flex-col items-center justify-between min-h-[90vh]">
-        {/* Top area with logo and headings */}
-        <div className="w-full flex flex-col items-center pt-4">
-          {/* Logo image */}
-          <div className="w-36 h-36 flex items-center justify-center mb-4">
+    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex flex-col px-4" style={{ paddingTop: 'var(--tg-safe-top, env(safe-area-inset-top, 0px))' }}>
+      <div className="w-full max-w-[400px] mx-auto flex flex-col items-center flex-1">
+        {/* Center area with logo and headings - vertically centered */}
+        <div className="w-full flex flex-col items-center justify-center flex-1">
+          <div className="w-40 h-40 flex items-center justify-center mb-5">
             <img 
               src={entryLogo} 
               alt="AguGram Logo" 
@@ -344,19 +343,19 @@ export default function EntryPage() {
           </div>
 
           <h1 
-            className="text-3xl leading-tight text-[#5800EF] text-center font-extrabold mb-2" 
+            className="text-4xl leading-tight text-[#5800EF] text-center font-extrabold mb-2" 
             style={{ fontFamily: 'Raleway' }}
           >
             AguGram
           </h1>
           <h2 
-            className="text-lg text-white/80 text-center font-medium px-4" 
+            className="text-xl text-white/80 text-center font-semibold px-4" 
             style={{ fontFamily: 'Raleway' }}
           >
             Первая соцсеть для студентов
           </h2>
           <p 
-            className="text-base text-white/50 text-center mt-4 px-6" 
+            className="text-lg text-white/50 text-center mt-4 px-6" 
             style={{ fontFamily: 'Raleway' }}
           >
             Сообщество, где быть внутри — уже привилегия
@@ -364,7 +363,7 @@ export default function EntryPage() {
         </div>
 
         {/* Bottom area with slider button and created-by */}
-        <div className="w-full flex flex-col items-center pb-6">
+        <div className="w-full flex flex-col items-center pb-6 shrink-0">
           {/* Swipe to unlock button */}
           <div 
             ref={containerRef}

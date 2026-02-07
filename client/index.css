@@ -8,6 +8,7 @@
   /* Telegram viewport height - updated by JS */
   --tg-viewport-height: 100vh;
   --tg-viewport-stable-height: 100vh;
+  --tg-safe-top: 0px;
   
   /* Safe area insets for notched devices */
   --safe-area-inset-top: env(safe-area-inset-top, 0px);

@@ -27,28 +27,30 @@ export default function BottomNavigation() {
   const [location] = useLocation();
   
   return (
-    <div className="fixed bottom-0 left-0 right-0 bg-background border-t border-border z-50">
-      <div className="flex items-center justify-around h-16 px-4">
-        {navigationItems.map((item) => {
-          const isActive = location === item.path;
-          const Icon = item.icon;
-          
-          return (
-            <Link
-              key={item.id}
-              href={item.path}
-              className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${
-                isActive 
-                  ? 'text-primary' 
-                  : 'text-muted-foreground hover:text-foreground'
-              }`}
-              data-testid={`nav-${item.id}`}
-            >
-              <Icon size={20} className="mb-1" />
-              <span className="text-xs font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
+    <div className="fixed bottom-0 left-0 right-0 z-50" style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div className="bg-[#0A0A12] border-t border-white/10">
+        <div className="flex items-center justify-around h-16 px-4">
+          {navigationItems.map((item) => {
+            const isActive = location === item.path;
+            const Icon = item.icon;
+            
+            return (
+              <Link
+                key={item.id}
+                href={item.path}
+                className={`flex flex-col items-center justify-center flex-1 py-2 transition-colors ${
+                  isActive 
+                    ? 'text-[#7C3AED]' 
+                    : 'text-white/40 hover:text-[#7C3AED]/70'
+                }`}
+                data-testid={`nav-${item.id}`}
+              >
+                <Icon size={22} className="mb-1" />
+                <span className="text-[11px] font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
       </div>
     </div>
   );

@@ -26,10 +26,10 @@ interface RegistrationData {
 }
 
 // Unified field styles - компактные и современные
-const fieldBaseClasses = "w-full h-[48px] rounded-xl border-none bg-white/95 text-gray-900 text-[14px] px-3.5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 box-border transition-all";
-const textareaClasses = "w-full h-[90px] rounded-xl border-none bg-white/95 text-gray-900 text-[14px] px-3.5 py-2.5 resize-none placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 box-border transition-all";
-const selectTriggerClasses = "w-full h-[48px] rounded-xl border-none bg-white/95 text-gray-900 text-[14px] px-3.5 data-[placeholder]:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 box-border transition-all";
-const fileInputClasses = "w-full h-[48px] rounded-xl border-none bg-white/95 text-gray-900 text-[13px] px-3 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#5800EF] file:text-white hover:file:bg-[#4A00CC] file:transition-colors cursor-pointer box-border";
+const fieldBaseClasses = "w-full min-h-[48px] h-[48px] rounded-xl border-2 border-transparent bg-white/95 text-gray-900 text-[14px] px-3.5 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 focus:border-[#5800EF]/30 box-border transition-colors duration-200 appearance-none";
+const textareaClasses = "w-full min-h-[90px] rounded-xl border-2 border-transparent bg-white/95 text-gray-900 text-[14px] px-3.5 py-2.5 resize-none placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 focus:border-[#5800EF]/30 box-border transition-colors duration-200";
+const selectTriggerClasses = "w-full min-h-[48px] h-[48px] rounded-xl border-2 border-transparent bg-white/95 text-gray-900 text-[14px] px-3.5 data-[placeholder]:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 focus:border-[#5800EF]/30 box-border transition-colors duration-200";
+const fileInputClasses = "w-full min-h-[48px] h-[48px] rounded-xl border-2 border-transparent bg-white/95 text-gray-900 text-[13px] px-3 focus:outline-none focus:ring-2 focus:ring-[#5800EF]/50 file:mr-3 file:py-1.5 file:px-3 file:rounded-lg file:border-0 file:text-xs file:font-semibold file:bg-[#5800EF] file:text-white hover:file:bg-[#4A00CC] file:transition-colors cursor-pointer box-border";
 
 export default function RegistrationPage() {
   const [, setLocation] = useLocation();
@@ -322,9 +322,9 @@ export default function RegistrationPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex items-center justify-center px-5 py-6">
-      <div className="w-full max-w-[428px] min-h-[926px] rounded-3xl flex items-center justify-center px-6 py-6 box-border">
-        <div className="w-full max-w-[390px] rounded-3xl px-6 py-6 box-border bg-white/8 backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] flex flex-col relative border border-white/10">
+    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex flex-col items-center overflow-y-auto px-5 py-6" style={{ paddingTop: 'calc(var(--tg-safe-top, env(safe-area-inset-top, 0px)) + 24px)' }}>
+      <div className="w-full max-w-[428px] flex items-start justify-center px-2 py-4 box-border">
+        <div className="w-full max-w-[390px] rounded-3xl px-6 py-6 box-border bg-white/[0.08] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] flex flex-col relative border border-white/10">
           {/* Back button */}
           <button
             type="button"
@@ -363,7 +363,7 @@ export default function RegistrationPage() {
           </div>
 
           {/* Form steps */}
-          <div className="flex flex-col gap-3 mt-1 relative overflow-hidden">
+          <div className="flex flex-col gap-3 mt-1 relative overflow-visible">
             {/* Step 1: Personal Information */}
             <motion.div
               className="flex flex-col gap-3"
