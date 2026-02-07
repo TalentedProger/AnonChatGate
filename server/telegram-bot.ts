@@ -66,16 +66,23 @@ try {
 
 // Determine if polling should be enabled
 // In production, ALWAYS disable polling to avoid 409 conflicts
-// Use ENABLE_BOT_POLLING=true to explicitly enable it on ONE instance only
+// Polling is NOT needed for Telegram Mini Apps - they use initData authentication
+// Use ENABLE_BOT_POLLING=true to explicitly enable it ONLY if you have a single instance
 const isProduction = process.env.NODE_ENV === 'production';
-const enablePolling = process.env.ENABLE_BOT_POLLING === 'true';
+const enablePolling = process.env.ENABLE_BOT_POLLING === 'true' && !isProduction;
+
+// In production, NEVER enable polling - it causes 409 conflicts on multi-instance deployments
+if (isProduction && process.env.ENABLE_BOT_POLLING === 'true') {
+  logger.warn('[Telegram Bot] ENABLE_BOT_POLLING=true is IGNORED in production to prevent 409 conflicts');
+  logger.warn('[Telegram Bot] Telegram Mini Apps work without polling - authentication uses initData');
+}
 
 logger.info(`[Telegram Bot] Environment: NODE_ENV=${process.env.NODE_ENV}, isProduction=${isProduction}, ENABLE_BOT_POLLING=${process.env.ENABLE_BOT_POLLING}`);
 
 if (!enablePolling) {
-  logger.info('[Telegram Bot] Polling DISABLED (set ENABLE_BOT_POLLING=true to enable on ONE instance only)');
+  logger.info('[Telegram Bot] Polling DISABLED - Mini App authentication will still work via initData');
 } else {
-  logger.info('[Telegram Bot] Polling ENABLED - make sure only ONE instance has this enabled!');
+  logger.info('[Telegram Bot] Polling ENABLED (development mode) - make sure only ONE instance has this enabled!');
 }
 
 // Create bot with conditional polling
@@ -127,6 +134,14 @@ bot.on('polling_error', (error: any) => {
       logger.error('[Telegram Bot] Another bot instance may be running with the same token');
       logger.error('  - Stop other instances of this application');
       logger.error('  - Each bot token can only be used by one polling instance');
+      logger.error('[Telegram Bot] STOPPING POLLING to avoid conflicts...');
+      // Stop polling immediately on 409 to prevent spam
+      try {
+        bot.stopPolling();
+        logger.info('[Telegram Bot] Polling stopped. App will continue working without bot polling features.');
+      } catch (stopError) {
+        logger.error('[Telegram Bot] Failed to stop polling:', stopError);
+      }
     }
   }
 });
