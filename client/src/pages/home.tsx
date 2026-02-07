@@ -1,6 +1,6 @@
 import { useAuth } from '@/lib/auth';
 import { motion } from 'framer-motion';
-import { Zap, Shield, MessageSquare, Users, Rocket, Lock, TrendingUp, Newspaper, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Zap, Shield, MessageSquare, Users, Rocket, Lock, TrendingUp, Newspaper, ChevronLeft, ChevronRight, Heart, X, Star } from 'lucide-react';
 import { useState, useEffect, useRef } from 'react';
 import { apiRequest } from '@/lib/queryClient';
 import { Swiper, SwiperSlide } from 'swiper/react';
@@ -22,10 +22,26 @@ interface TopUser {
   popularity: number;
 }
 
+interface FavoriteUser {
+  id: number;
+  favoriteUserId: number;
+  favoriteUser: {
+    id: number;
+    anonName: string;
+    gender: string | null;
+    course: string | null;
+    direction: string | null;
+  };
+  createdAt: string;
+  monthKey: string;
+}
+
 export default function HomePage() {
   const auth = useAuth();
   const [news, setNews] = useState<NewsItem[]>([]);
   const [topUsers, setTopUsers] = useState<TopUser[]>([]);
+  const [favorites, setFavorites] = useState<FavoriteUser[]>([]);
+  const [canAddFavorite, setCanAddFavorite] = useState(true);
   const [currentNewsIndex, setCurrentNewsIndex] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -45,6 +61,14 @@ export default function HomePage() {
           const usersData = await usersResponse.json();
           setTopUsers(usersData.topUsers || []);
         }
+
+        // Load favorites
+        const favoritesResponse = await apiRequest('GET', '/api/favorites');
+        if (favoritesResponse.ok) {
+          const favoritesData = await favoritesResponse.json();
+          setFavorites(favoritesData.favorites || []);
+          setCanAddFavorite(favoritesData.canAddThisMonth);
+        }
       } catch (error) {
         console.error('Failed to load home data:', error);
       } finally {
@@ -61,6 +85,17 @@ export default function HomePage() {
 
   const prevNews = () => {
     setCurrentNewsIndex((prev) => (prev - 1 + news.length) % news.length);
+  };
+
+  const removeFavorite = async (favoriteUserId: number) => {
+    try {
+      const response = await apiRequest('DELETE', `/api/favorites/${favoriteUserId}`);
+      if (response.ok) {
+        setFavorites(prev => prev.filter(f => f.favoriteUserId !== favoriteUserId));
+      }
+    } catch (error) {
+      console.error('Failed to remove favorite:', error);
+    }
   };
 
   return (
@@ -93,7 +128,7 @@ export default function HomePage() {
             transition={{ duration: 0.5, delay: 0.7 }}
             className="w-full max-w-[90vw] md:hidden min-h-avatar mt-4"
           >
-            <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10">
+            <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-700">
               <div className="flex items-center space-x-4 mb-4">
                 <div className="relative w-12 h-12 rounded-full overflow-visible bg-gradient-to-br from-cyan-400 via-violet-400 to-pink-400 flex items-center justify-center text-black font-bold text-lg">
                   {auth.user.anonName?.charAt(auth.user.anonName.length - 1) || '?'}
@@ -104,7 +139,7 @@ export default function HomePage() {
                   <p className="text-sm text-cyan-300">ID: {auth.user.id}</p>
                 </div>
               </div>
-              <div className="bg-white/5 rounded-xl p-3">
+              <div className="bg-zinc-800 rounded-xl p-3">
                 <p className="text-sm text-gray-300">Статус: <span className="text-green-400 font-medium">Активен</span></p>
               </div>
             </div>
@@ -175,12 +210,12 @@ export default function HomePage() {
 
         {/* News Section */}
         {(news.length > 0 || loading) && (
-          <div className="w-full max-w-[90vw] min-h-card mt-4">
+          <div className="w-full max-w-[95vw] min-h-card mt-4">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.7 }}
-              className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10"
+              className="bg-zinc-900 rounded-xl p-5 border border-zinc-700"
             >
               <div className="flex items-center gap-3 mb-4">
                 <Newspaper className="w-6 h-6 text-cyan-400" />
@@ -191,14 +226,14 @@ export default function HomePage() {
               ) : news.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">Новостей пока нет</div>
               ) : (
-              <div className="relative flex items-center justify-center gap-4">
+              <div className="relative flex items-center justify-center gap-2">
                 {news.length > 1 && (
                   <button
                     onClick={prevNews}
-                    className="flex-shrink-0 hover:scale-110 transition-transform"
+                    className="flex-shrink-0 hover:scale-110 transition-transform p-1"
                     aria-label="Предыдущая новость"
                   >
-                    <ChevronLeft className="w-8 h-8 text-white drop-shadow-lg" />
+                    <ChevronLeft className="w-6 h-6 text-white/70" />
                   </button>
                 )}
                 
@@ -209,11 +244,11 @@ export default function HomePage() {
                     animate={{ opacity: 1, x: 0 }}
                     exit={{ opacity: 0, x: -50 }}
                     transition={{ duration: 0.3 }}
-                    className="bg-white/5 rounded-lg p-6 min-h-[280px] flex flex-col justify-between"
+                    className="bg-zinc-800 rounded-lg p-5 min-h-[260px] flex flex-col justify-between"
                   >
                     <div>
                       <h4 className="text-lg font-semibold text-white mb-3">{news[currentNewsIndex].title}</h4>
-                      <p className="text-sm text-gray-300 line-clamp-4">{news[currentNewsIndex].content}</p>
+                      <p className="text-sm text-gray-300 line-clamp-5">{news[currentNewsIndex].content}</p>
                     </div>
                     <div className="flex items-center justify-between mt-4">
                       <span className="text-xs text-gray-500">
@@ -229,10 +264,10 @@ export default function HomePage() {
                 {news.length > 1 && (
                   <button
                     onClick={nextNews}
-                    className="flex-shrink-0 hover:scale-110 transition-transform"
+                    className="flex-shrink-0 hover:scale-110 transition-transform p-1"
                     aria-label="Следующая новость"
                   >
-                    <ChevronRight className="w-8 h-8 text-white drop-shadow-lg" />
+                    <ChevronRight className="w-6 h-6 text-white/70" />
                   </button>
                 )}
               </div>
@@ -241,6 +276,76 @@ export default function HomePage() {
           </div>
         )}
 
+        {/* Favorites Section */}
+        <div className="w-full max-w-[90vw] min-h-card mt-4">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.75 }}
+            className="bg-zinc-900 rounded-xl p-6 border border-zinc-700"
+          >
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <Heart className="w-6 h-6 text-pink-400 fill-pink-400" />
+                <h3 className="text-xl font-semibold text-white">Избранные</h3>
+              </div>
+              {canAddFavorite ? (
+                <span className="text-xs text-green-400 bg-green-400/10 px-2 py-1 rounded-full">
+                  ✓ Можно добавить
+                </span>
+              ) : (
+                <span className="text-xs text-gray-400 bg-zinc-800 px-2 py-1 rounded-full">
+                  До след. месяца
+                </span>
+              )}
+            </div>
+            
+            <p className="text-sm text-gray-400 mb-4">
+              Выбирайте мудро — вы можете добавить только <span className="text-pink-400 font-semibold">1 человека в месяц</span> в избранное. 
+              Это делает каждый выбор особенным! 💫
+            </p>
+
+            {favorites.length === 0 ? (
+              <div className="text-center py-8">
+                <Star className="w-12 h-12 text-zinc-600 mx-auto mb-3" />
+                <p className="text-gray-400">У вас пока нет избранных</p>
+                <p className="text-sm text-gray-500 mt-1">Добавляйте интересных людей из чата или профилей</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {favorites.map((favorite) => (
+                  <div
+                    key={favorite.id}
+                    className="flex items-center justify-between bg-zinc-800 rounded-lg p-3 hover:bg-zinc-700 transition-colors"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-gradient-to-br from-pink-500 to-violet-500 flex items-center justify-center text-white font-bold">
+                        {favorite.favoriteUser.anonName?.charAt(favorite.favoriteUser.anonName.length - 1) || '?'}
+                      </div>
+                      <div>
+                        <span className="text-white font-medium">{favorite.favoriteUser.anonName}</span>
+                        {favorite.favoriteUser.course && (
+                          <p className="text-xs text-gray-400">
+                            {favorite.favoriteUser.course} курс
+                            {favorite.favoriteUser.direction && ` • ${favorite.favoriteUser.direction}`}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => removeFavorite(favorite.favoriteUserId)}
+                      className="w-8 h-8 flex items-center justify-center rounded-full hover:bg-red-500/20 transition-colors"
+                      title="Удалить из избранного"
+                    >
+                      <X className="w-4 h-4 text-gray-400 hover:text-red-400" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </motion.div>
+        </div>
+
         {/* Top Users Leaderboard */}
         {(topUsers.length > 0 || loading) && (
           <div className="w-full max-w-[90vw] min-h-card mt-4">
@@ -248,7 +353,7 @@ export default function HomePage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.8 }}
-              className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10"
+              className="bg-zinc-900 rounded-xl p-6 border border-zinc-700"
             >
               <div className="flex items-center gap-3 mb-4">
                 <TrendingUp className="w-6 h-6 text-yellow-400" />
@@ -263,19 +368,19 @@ export default function HomePage() {
               ) : topUsers.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">Данные загружаются...</div>
               ) : (
-              <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-white/20 scrollbar-track-transparent">
+              <div className="max-h-96 overflow-y-auto scrollbar-thin scrollbar-thumb-zinc-700 scrollbar-track-transparent">
                 <div className="space-y-2">
                   {topUsers.map((user, index) => (
                     <div
                       key={user.userId}
-                      className="flex items-center justify-between bg-white/5 rounded-lg p-3 hover:bg-white/10 transition-colors"
+                      className="flex items-center justify-between bg-zinc-800 rounded-lg p-3 hover:bg-zinc-700 transition-colors"
                     >
                       <div className="flex items-center gap-3">
                         <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
                           index === 0 ? 'bg-yellow-400 text-black' :
                           index === 1 ? 'bg-gray-300 text-black' :
                           index === 2 ? 'bg-orange-400 text-black' :
-                          'bg-white/10 text-white'
+                          'bg-zinc-700 text-white'
                         }`}>
                           {index + 1}
                         </div>
@@ -304,7 +409,7 @@ export default function HomePage() {
               transition={{ duration: 0.5, delay: 0.7 }}
               className="hidden md:block min-h-[200px]"
             >
-              <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 h-full">
+              <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-700 h-full">
                 <div className="flex items-center space-x-4 mb-4">
                   <div className="relative w-12 h-12 rounded-full overflow-visible bg-gradient-to-br from-cyan-400 via-violet-400 to-pink-400 flex items-center justify-center text-black font-bold text-lg">
                     {auth.user.anonName?.charAt(auth.user.anonName.length - 1) || '?'}
@@ -315,7 +420,7 @@ export default function HomePage() {
                     <p className="text-sm text-cyan-300">ID: {auth.user.id}</p>
                   </div>
                 </div>
-                <div className="bg-white/5 rounded-xl p-3">
+                <div className="bg-zinc-800 rounded-xl p-3">
                   <p className="text-sm text-gray-300">Статус: <span className="text-green-400 font-medium">Активен</span></p>
                 </div>
               </div>
@@ -328,7 +433,7 @@ export default function HomePage() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.8 }}
           >
-            <div className="bg-black/20 backdrop-blur-sm rounded-xl p-6 border border-white/10 h-full">
+            <div className="bg-zinc-900 rounded-xl p-6 border border-zinc-700 h-full">
               <div className="flex items-center gap-3 mb-3">
                 <Lock className="w-6 h-6 text-indigo-400" />
                 <h3 className="text-lg font-semibold text-white">Защита данных</h3>
@@ -362,7 +467,7 @@ function FeatureCard({ icon, title, description, glowColor }: {
 
   return (
     <div
-      className={`bg-black/40 backdrop-blur-md rounded-2xl p-6 border-2 ${glowColors[glowColor as keyof typeof glowColors]} transition-all duration-300 cursor-pointer hover:scale-[1.02] h-full`}
+      className={`bg-zinc-800/90 rounded-2xl p-6 border-2 ${glowColors[glowColor as keyof typeof glowColors]} transition-all duration-300 cursor-pointer hover:scale-[1.02] h-full`}
     >
       <div className="flex items-start space-x-4">
         <div className="mt-1">{icon}</div>

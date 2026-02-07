@@ -1,4 +1,4 @@
-import { users, messages, rooms, type User, type InsertUser, type InsertProfile, type Message, type InsertMessage, type Room, type InsertRoom } from "@shared/schema";
+import { users, messages, rooms, favorites, type User, type InsertUser, type InsertProfile, type Message, type InsertMessage, type Room, type InsertRoom, type Favorite, type InsertFavorite } from "@shared/schema";
 import { db } from "./db";
 import { eq, desc, lt, gt, and, sql } from "drizzle-orm";
 import { MESSAGE } from "./config";
@@ -16,6 +16,7 @@ export interface IStorage {
   getUserById(id: number): Promise<User | undefined>;
   getUserByTgId(tgId: bigint): Promise<User | undefined>;
   createUser(user: InsertUser): Promise<User>;
+  updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
   updateUserProfile(id: number, profile: InsertProfile): Promise<User | undefined>;
   markProfileCompleted(id: number): Promise<User | undefined>;
 
@@ -31,6 +32,13 @@ export interface IStorage {
   getRoomById(id: number): Promise<Room | undefined>;
   createRoom(room: InsertRoom): Promise<Room>;
   getOrCreateGlobalRoom(): Promise<Room>;
+  
+  // Favorites operations
+  getUserFavorites(userId: number): Promise<(Favorite & { favoriteUser: User })[]>;
+  getFavoriteByMonth(userId: number, monthKey: string): Promise<Favorite | undefined>;
+  addFavorite(favorite: InsertFavorite): Promise<Favorite>;
+  removeFavorite(userId: number, favoriteUserId: number): Promise<void>;
+  isFavorite(userId: number, favoriteUserId: number): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -171,6 +179,15 @@ export class DatabaseStorage implements IStorage {
     return user || undefined;
   }
 
+  async updateUser(id: number, data: Partial<User>): Promise<User | undefined> {
+    const [user] = await db
+      .update(users)
+      .set(data)
+      .where(eq(users.id, id))
+      .returning();
+    return user || undefined;
+  }
+
   async markProfileCompleted(id: number): Promise<User | undefined> {
     const [user] = await db
       .update(users)
@@ -213,6 +230,60 @@ export class DatabaseStorage implements IStorage {
       .where(eq(messages.id, messageId))
       .returning();
     return message || undefined;
+  }
+
+  // Favorites operations
+  async getUserFavorites(userId: number): Promise<(Favorite & { favoriteUser: User })[]> {
+    const result = await db
+      .select()
+      .from(favorites)
+      .innerJoin(users, eq(favorites.favoriteUserId, users.id))
+      .where(eq(favorites.userId, userId))
+      .orderBy(desc(favorites.createdAt));
+    
+    return result.map(row => ({
+      ...row.favorites,
+      favoriteUser: row.users
+    }));
+  }
+
+  async getFavoriteByMonth(userId: number, monthKey: string): Promise<Favorite | undefined> {
+    const [favorite] = await db
+      .select()
+      .from(favorites)
+      .where(and(
+        eq(favorites.userId, userId),
+        eq(favorites.monthKey, monthKey)
+      ));
+    return favorite || undefined;
+  }
+
+  async addFavorite(insertFavorite: InsertFavorite): Promise<Favorite> {
+    const [favorite] = await db
+      .insert(favorites)
+      .values(insertFavorite)
+      .returning();
+    return favorite;
+  }
+
+  async removeFavorite(userId: number, favoriteUserId: number): Promise<void> {
+    await db
+      .delete(favorites)
+      .where(and(
+        eq(favorites.userId, userId),
+        eq(favorites.favoriteUserId, favoriteUserId)
+      ));
+  }
+
+  async isFavorite(userId: number, favoriteUserId: number): Promise<boolean> {
+    const [favorite] = await db
+      .select()
+      .from(favorites)
+      .where(and(
+        eq(favorites.userId, userId),
+        eq(favorites.favoriteUserId, favoriteUserId)
+      ));
+    return !!favorite;
   }
 }
 

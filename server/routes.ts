@@ -380,8 +380,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user = await storage.createUser({
           tgId,
           username: userData.username || null,
+          telegramPhotoUrl: userData.photo_url || null, // Store Telegram avatar
           status: 'approved',
         });
+      } else if (userData.photo_url && user.telegramPhotoUrl !== userData.photo_url) {
+        // Update Telegram photo if it changed
+        await storage.updateUser(user.id, { telegramPhotoUrl: userData.photo_url });
+        user.telegramPhotoUrl = userData.photo_url;
       }
 
       const token = generateAuthToken(user);
@@ -484,6 +489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           bio: user.bio,
           gender: user.gender,
           avatarUrl: user.avatarUrl,
+          telegramPhotoUrl: user.telegramPhotoUrl, // Real Telegram avatar
           socialLinks: user.socialLinks || [],
           // Also return individual fields for convenience
           telegram,
@@ -868,6 +874,157 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Create news item (for admin/testing)
   app.post('/api/news', requireAuth, statisticsController.createNewsItem);
+
+  // ============================================================================
+  // FAVORITES ROUTES
+  // ============================================================================
+
+  // Get current user's favorites
+  app.get('/api/favorites', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      const favoritesData = await storage.getUserFavorites(userId);
+      
+      // Get current month key for checking if user can add a new favorite
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      const currentMonthFavorite = await storage.getFavoriteByMonth(userId, currentMonthKey);
+      
+      res.json({
+        favorites: favoritesData.map(f => ({
+          id: f.id,
+          favoriteUserId: f.favoriteUserId,
+          favoriteUser: {
+            id: f.favoriteUser.id,
+            anonName: f.favoriteUser.anonName,
+            gender: f.favoriteUser.gender,
+            course: f.favoriteUser.course,
+            direction: f.favoriteUser.direction,
+          },
+          createdAt: f.createdAt,
+          monthKey: f.monthKey,
+        })),
+        canAddThisMonth: !currentMonthFavorite,
+        currentMonthKey,
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        logError(error, { context: 'get_favorites', userId: req.user?.userId });
+      }
+      res.status(500).json({ error: 'Failed to get favorites' });
+    }
+  });
+
+  // Add a user to favorites (limited to 1 per month)
+  app.post('/api/favorites/:userId', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      const favoriteUserId = parseInt(req.params.userId, 10);
+      
+      if (isNaN(favoriteUserId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+      
+      if (userId === favoriteUserId) {
+        return res.status(400).json({ error: 'Cannot add yourself to favorites' });
+      }
+      
+      // Check if user exists
+      const favoriteUser = await storage.getUserById(favoriteUserId);
+      if (!favoriteUser) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      
+      // Get current month key
+      const now = new Date();
+      const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+      
+      // Check if user already has a favorite this month
+      const existingFavorite = await storage.getFavoriteByMonth(userId, currentMonthKey);
+      if (existingFavorite) {
+        return res.status(400).json({ 
+          error: 'Вы уже добавили избранного в этом месяце. Следующего можно добавить с начала следующего месяца.',
+          existingFavoriteId: existingFavorite.favoriteUserId
+        });
+      }
+      
+      // Check if this user is already in favorites (from previous months)
+      const isAlreadyFavorite = await storage.isFavorite(userId, favoriteUserId);
+      if (isAlreadyFavorite) {
+        return res.status(400).json({ error: 'Этот пользователь уже в избранном' });
+      }
+      
+      // Add to favorites
+      const favorite = await storage.addFavorite({
+        userId,
+        favoriteUserId,
+        monthKey: currentMonthKey,
+      });
+      
+      res.json({
+        success: true,
+        favorite: {
+          id: favorite.id,
+          favoriteUserId: favorite.favoriteUserId,
+          favoriteUser: {
+            id: favoriteUser.id,
+            anonName: favoriteUser.anonName,
+            gender: favoriteUser.gender,
+          },
+          createdAt: favorite.createdAt,
+          monthKey: favorite.monthKey,
+        },
+        message: 'Пользователь добавлен в избранное! Выбирайте мудро - следующего можно добавить только в следующем месяце.',
+      });
+    } catch (error) {
+      if (error instanceof Error) {
+        logError(error, { context: 'add_favorite', userId: req.user?.userId });
+      }
+      res.status(500).json({ error: 'Failed to add favorite' });
+    }
+  });
+
+  // Remove user from favorites
+  app.delete('/api/favorites/:userId', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      const favoriteUserId = parseInt(req.params.userId, 10);
+      
+      if (isNaN(favoriteUserId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+      
+      await storage.removeFavorite(userId, favoriteUserId);
+      
+      res.json({ success: true, message: 'Пользователь удален из избранного' });
+    } catch (error) {
+      if (error instanceof Error) {
+        logError(error, { context: 'remove_favorite', userId: req.user?.userId });
+      }
+      res.status(500).json({ error: 'Failed to remove favorite' });
+    }
+  });
+
+  // Check if a specific user is in favorites
+  app.get('/api/favorites/check/:userId', requireAuth, async (req: any, res) => {
+    try {
+      const userId = req.user.userId;
+      const favoriteUserId = parseInt(req.params.userId, 10);
+      
+      if (isNaN(favoriteUserId)) {
+        return res.status(400).json({ error: 'Invalid user ID' });
+      }
+      
+      const isFavorite = await storage.isFavorite(userId, favoriteUserId);
+      
+      res.json({ isFavorite });
+    } catch (error) {
+      if (error instanceof Error) {
+        logError(error, { context: 'check_favorite', userId: req.user?.userId });
+      }
+      res.status(500).json({ error: 'Failed to check favorite status' });
+    }
+  });
 
   return httpServer;
 }

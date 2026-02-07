@@ -10,6 +10,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { useAuth } from '@/lib/auth';
 import { apiRequest } from '@/lib/queryClient';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useTelegramPadding } from '@/hooks/useTelegramPadding';
 import maleProfile from '@/assets/male_profile.jpg';
 import femaleProfile from '@/assets/female_profile.jpg';
 import type { UserStatistics } from '@/types';
@@ -17,6 +18,7 @@ import type { UserStatistics } from '@/types';
 export default function ProfilePage() {
   const auth = useAuth();
   const queryClient = useQueryClient();
+  const { topPadding } = useTelegramPadding();
   const [profile, setProfile] = useState<any>(null);
   const [statistics, setStatistics] = useState<UserStatistics>({ popularity: 0, views: 0, friendRequests: 0 });
   const [activeProfile, setActiveProfile] = useState<'main' | 'anon'>('main');
@@ -91,11 +93,28 @@ export default function ProfilePage() {
   }, [statsData]);
 
   // Memoize avatar to prevent re-computation on every render
+  // For main profile: use Telegram photo > uploaded avatar > gender-based default
+  // For anon profile: use gender-based default only
   const profileAvatar = useMemo(() => {
     if (mainAvatar) return mainAvatar;
     if (!profile?.gender) return undefined;
     return profile.gender === 'male' ? maleProfile : femaleProfile;
   }, [mainAvatar, profile?.gender]);
+
+  // Main profile avatar prioritizes real Telegram photo
+  const mainProfileAvatar = useMemo(() => {
+    if (profile?.telegramPhotoUrl) return profile.telegramPhotoUrl;
+    if (profile?.avatarUrl) return profile.avatarUrl;
+    if (mainAvatar) return mainAvatar;
+    if (!profile?.gender) return undefined;
+    return profile.gender === 'male' ? maleProfile : femaleProfile;
+  }, [profile?.telegramPhotoUrl, profile?.avatarUrl, mainAvatar, profile?.gender]);
+
+  // Anon profile uses default avatars only
+  const anonProfileAvatar = useMemo(() => {
+    if (!profile?.gender) return undefined;
+    return profile.gender === 'male' ? maleProfile : femaleProfile;
+  }, [profile?.gender]);
 
   const handleEditProfile = () => {
     setMenuOpen(false);
@@ -204,9 +223,9 @@ export default function ProfilePage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white p-6 flex flex-col items-center pb-20">
+    <div className="min-h-screen w-full bg-gradient-to-b from-black via-[#0a001a] to-[#050010] text-white p-6 flex flex-col items-center pb-20" style={{ paddingTop: topPadding > 0 ? `${topPadding + 24}px` : '24px' }}>
       {/* Compact Switcher */}
-      <div className="fixed top-6 left-6 flex items-center bg-white/10 backdrop-blur-md rounded-full p-1 z-50">
+      <div className="fixed left-6 flex items-center bg-zinc-800 rounded-full p-1 z-50" style={{ top: topPadding > 0 ? `${topPadding + 24}px` : '24px' }}>
         {([
           { key: "main" as const, icon: "👤" },
           { key: "anon" as const, icon: "🎭" },
@@ -226,7 +245,7 @@ export default function ProfilePage() {
       </div>
 
       {/* Menu button */}
-      <div className="fixed top-6 right-6 z-50">
+      <div className="fixed right-6 z-50" style={{ top: topPadding > 0 ? `${topPadding + 24}px` : '24px' }}>
         <div className="relative">
           <button
             onClick={() => setMenuOpen(!menuOpen)}
@@ -295,8 +314,8 @@ export default function ProfilePage() {
                 onClick={() => fileInputRef.current?.click()}
               >
                 <div className="absolute inset-0 rounded-full overflow-hidden">
-                  {profileAvatar ? (
-                    <img src={profileAvatar} alt="Profile" className="w-full h-full object-cover" loading="eager" />
+                  {mainProfileAvatar ? (
+                    <img src={mainProfileAvatar} alt="Profile" className="w-full h-full object-cover" loading="eager" />
                   ) : (
                     <span className="text-3xl font-bold text-white flex items-center justify-center h-full">?</span>
                   )}
@@ -370,7 +389,7 @@ export default function ProfilePage() {
                   {selectedPhotos.map((photo, i) => (
                     <motion.div
                       key={i}
-                      className="relative rounded-xl overflow-hidden border border-white/30 flex items-center justify-center bg-white/10 aspect-[3/4] cursor-pointer hover:border-violet-400 transition-colors"
+                      className="relative rounded-xl overflow-hidden border border-zinc-600 flex items-center justify-center bg-zinc-800 aspect-[3/4] cursor-pointer hover:border-violet-400 transition-colors"
                       data-testid={`photo-slot-${i}`}
                       onClick={() => !photo && handlePhotoClick(i)}
                     >
@@ -413,10 +432,8 @@ export default function ProfilePage() {
             >
               <div className="relative w-32 h-32 rounded-full overflow-visible flex items-center justify-center bg-gradient-to-br from-pink-500 via-cyan-500 to-violet-500">
                 <div className="absolute inset-0 rounded-full overflow-hidden">
-                  {profile?.gender === 'male' ? (
-                    <img src={maleProfile} alt="Anonymous Profile" className="w-full h-full object-cover" />
-                  ) : profile?.gender === 'female' ? (
-                    <img src={femaleProfile} alt="Anonymous Profile" className="w-full h-full object-cover" />
+                  {anonProfileAvatar ? (
+                    <img src={anonProfileAvatar} alt="Anonymous Profile" className="w-full h-full object-cover" />
                   ) : (
                     <span className="text-3xl font-bold text-white flex items-center justify-center h-full">?</span>
                   )}
@@ -463,7 +480,7 @@ export default function ProfilePage() {
                   {[...Array(3)].map((_, i) => (
                     <motion.div
                       key={i}
-                      className="rounded-xl overflow-hidden border border-white/30 flex items-center justify-center bg-white/10 aspect-[3/4]"
+                      className="rounded-xl overflow-hidden border border-zinc-600 flex items-center justify-center bg-zinc-800 aspect-[3/4]"
                     >
                       <EyeOff className="w-6 h-6 text-white/60" />
                     </motion.div>
@@ -480,7 +497,7 @@ export default function ProfilePage() {
         <DialogContent className="bg-gradient-to-br from-black/95 to-violet-900/30 backdrop-blur-md border-2 border-violet-500/30 text-white w-[90%] max-w-[500px] rounded-[25px]" hideClose>
           <button
             onClick={() => setEditProfileOpen(false)}
-            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-white/10 rounded-full transition-colors z-50"
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-zinc-700 rounded-full transition-colors z-50"
           >
             <X className="w-5 h-5 font-bold" strokeWidth={3} />
           </button>
@@ -498,7 +515,7 @@ export default function ProfilePage() {
               <Input
                 value={editingData.displayName}
                 onChange={(e) => setEditingData(prev => ({ ...prev, displayName: e.target.value }))}
-                className="bg-white/10 border-white/20 text-white"
+                className="bg-zinc-800 border-zinc-600 text-white"
                 placeholder="Введите имя"
               />
             </div>
@@ -508,7 +525,7 @@ export default function ProfilePage() {
                 value={editingData.course} 
                 onValueChange={(value) => setEditingData(prev => ({ ...prev, course: value }))}
               >
-                <SelectTrigger className="bg-white/10 border-white/20 text-white">
+                <SelectTrigger className="bg-zinc-800 border-zinc-600 text-white">
                   <SelectValue placeholder="Выберите курс" />
                 </SelectTrigger>
                 <SelectContent className="bg-white border border-gray-200 rounded-xl">
@@ -523,7 +540,7 @@ export default function ProfilePage() {
               <Input
                 value={editingData.direction}
                 onChange={(e) => setEditingData(prev => ({ ...prev, direction: e.target.value }))}
-                className="bg-white/10 border-white/20 text-white"
+                className="bg-zinc-800 border-zinc-600 text-white"
                 placeholder="Например: Информатика"
               />
             </div>
@@ -532,7 +549,7 @@ export default function ProfilePage() {
               <Textarea
                 value={editingData.bio}
                 onChange={(e) => setEditingData(prev => ({ ...prev, bio: e.target.value }))}
-                className="bg-white/10 border-white/20 text-white min-h-[100px]"
+                className="bg-zinc-800 border-zinc-600 text-white min-h-[100px]"
                 placeholder="Расскажите о себе"
               />
             </div>
@@ -548,7 +565,7 @@ export default function ProfilePage() {
             <Button
               onClick={() => setEditProfileOpen(false)}
               variant="outline"
-              className="w-full bg-white/10 border-white/20 text-white hover:bg-white/20"
+              className="w-full bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700"
             >
               <X className="w-4 h-4 mr-2" />
               Отмена
@@ -562,7 +579,7 @@ export default function ProfilePage() {
         <DialogContent className="bg-gradient-to-br from-black/95 to-violet-900/30 backdrop-blur-md border-2 border-violet-500/30 text-white w-[90%] max-w-[500px] rounded-[25px]" hideClose>
           <button
             onClick={() => setEditLinkOpen(false)}
-            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-white/10 rounded-full transition-colors z-50"
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-zinc-700 rounded-full transition-colors z-50"
           >
             <X className="w-5 h-5 font-bold" strokeWidth={3} />
           </button>
@@ -583,7 +600,7 @@ export default function ProfilePage() {
               <Input
                 value={linkValue}
                 onChange={(e) => setLinkValue(e.target.value)}
-                className="bg-white/10 border-white/20 text-white"
+                className="bg-zinc-800 border-zinc-600 text-white"
                 placeholder="https://..."
               />
             </div>
@@ -599,7 +616,7 @@ export default function ProfilePage() {
             <Button
               onClick={() => setEditLinkOpen(false)}
               variant="outline"
-              className="w-full bg-white/10 border-white/20 text-white hover:bg-white/20"
+              className="w-full bg-zinc-800 border-zinc-600 text-white hover:bg-zinc-700"
             >
               <X className="w-4 h-4 mr-2" />
               Отмена
@@ -613,7 +630,7 @@ export default function ProfilePage() {
         <DialogContent className="bg-gradient-to-br from-black/95 to-violet-900/30 backdrop-blur-md border-2 border-violet-500/30 text-white w-[90%] max-w-[400px] rounded-[25px]" hideClose>
           <button
             onClick={() => setComingSoonOpen(false)}
-            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-white/10 rounded-full transition-colors z-50"
+            className="absolute top-4 right-4 w-8 h-8 flex items-center justify-center text-white hover:bg-zinc-700 rounded-full transition-colors z-50"
           >
             <X className="w-5 h-5 font-bold" strokeWidth={3} />
           </button>
@@ -658,7 +675,7 @@ function MetricCard({ icon, value, label, borderColor }: { icon: React.ReactNode
 
 function Section({ title, children, locked }: { title: string, children: React.ReactNode, locked?: boolean }) {
   return (
-    <div className="space-y-2 mt-2 bg-black/20 rounded-xl p-3 w-full shadow-md shadow-white/5">
+    <div className="space-y-2 mt-2 bg-zinc-800/90 rounded-xl p-3 w-full shadow-md shadow-black/30">
       <h2 className="font-semibold text-lg flex items-center justify-between">
         <span className="flex items-center gap-2">
           <span className="text-white">•</span>
@@ -681,7 +698,7 @@ function SocialButton({ icon, label, onClick, hasLink }: {
     <motion.div
       whileHover={{ boxShadow: "0 0 15px rgba(177, 0, 255, 0.6)", scale: 1.05 }}
       onClick={onClick}
-      className="relative flex flex-col items-center justify-center w-24 h-24 bg-black/40 rounded-xl transition-all cursor-pointer"
+      className="relative flex flex-col items-center justify-center w-24 h-24 bg-zinc-800 rounded-xl transition-all cursor-pointer"
       data-testid={`social-${label.toLowerCase()}`}
     >
       <div className="mb-2">{icon}</div>

@@ -326,12 +326,12 @@ export default function RegistrationPage() {
   return (
     <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex flex-col items-center overflow-y-auto px-5 py-6" style={{ paddingTop: topPadding > 0 ? `${topPadding + 24}px` : '24px' }}>
       <div className="w-full max-w-[428px] flex items-start justify-center px-2 py-4 box-border">
-        <div className="w-full max-w-[390px] rounded-3xl px-6 py-6 box-border bg-white/[0.08] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] flex flex-col relative border border-white/10">
+        <div className="w-full max-w-[390px] rounded-3xl px-6 py-6 box-border bg-zinc-900 shadow-[0_8px_32px_rgba(0,0,0,0.3)] flex flex-col relative border border-zinc-700">
           {/* Back button */}
           <button
             type="button"
             onClick={prevStep}
-            className="absolute top-5 left-5 w-8 h-8 rounded-full border-none bg-white/15 text-white flex items-center justify-center cursor-pointer text-base leading-none hover:bg-white/25 transition-all backdrop-blur-sm"
+            className="absolute top-5 left-5 w-8 h-8 rounded-full border-none bg-zinc-700 text-white flex items-center justify-center cursor-pointer text-base leading-none hover:bg-zinc-600 transition-all"
             style={{ display: currentStep === 1 ? 'none' : 'flex' }}
           >
             ←
@@ -358,7 +358,7 @@ export default function RegistrationPage() {
                 className={`flex-1 h-1 rounded-full transition-all duration-300 ${
                   i < currentStep 
                     ? 'bg-gradient-to-r from-[#C42DFF] to-[#4A90FF] shadow-[0_0_8px_rgba(88,0,239,0.6)]' 
-                    : 'bg-white/10'
+                    : 'bg-zinc-700'
                 }`}
               />
             ))}
@@ -538,7 +538,7 @@ export default function RegistrationPage() {
               <Button
                 onClick={nextStep}
                 variant="outline"
-                className="mt-2 w-full h-10 rounded-xl font-medium text-white bg-white/10 border-none hover:bg-white/20 transition-all"
+                className="mt-2 w-full h-10 rounded-xl font-medium text-white bg-zinc-800 border-none hover:bg-zinc-700 transition-all"
                 style={{ fontFamily: 'Raleway' }}
               >
                 Пропустить
@@ -564,7 +564,7 @@ export default function RegistrationPage() {
                   Аватар (необязательно)
                 </Label>
                 {formData.avatarUrl ? (
-                  <div className="relative w-full h-28 rounded-xl overflow-hidden bg-white/10">
+                  <div className="relative w-full h-28 rounded-xl overflow-hidden bg-zinc-800">
                     <img 
                       src={formData.avatarUrl} 
                       alt="Avatar preview" 

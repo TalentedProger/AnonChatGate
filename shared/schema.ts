@@ -17,6 +17,7 @@ export const users = pgTable("users", {
   bio: text("bio"),
   gender: text("gender", { enum: ["male", "female"] }),
   avatarUrl: text("avatar_url"),
+  telegramPhotoUrl: text("telegram_photo_url"), // Real Telegram avatar URL
   socialLinks: text("social_links").array(),
   photos: text("photos").array(),
   profileCompleted: text("profile_completed", { enum: ["true", "false"] }).default("false"),
@@ -62,6 +63,16 @@ export const news = pgTable("news", {
   imageUrl: text("image_url"),
   authorId: integer("author_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
+// Favorites table - users can add 1 favorite per month
+export const favorites = pgTable("favorites", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id).notNull(),           // Who added the favorite
+  favoriteUserId: integer("favorite_user_id").references(() => users.id).notNull(), // Who is favorited
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  // Track the month this was set for the 1/month limit
+  monthKey: text("month_key").notNull(), // Format: "2025-01" - allows only 1 favorite per month
 });
 
 export const usersRelations = relations(users, ({ many }) => ({
@@ -125,6 +136,11 @@ export const insertRoomSchema = createInsertSchema(rooms).omit({
   createdAt: true,
 });
 
+export const insertFavoriteSchema = createInsertSchema(favorites).omit({
+  id: true,
+  createdAt: true,
+});
+
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type User = typeof users.$inferSelect;
@@ -132,3 +148,5 @@ export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertRoom = z.infer<typeof insertRoomSchema>;
 export type Room = typeof rooms.$inferSelect;
+export type Favorite = typeof favorites.$inferSelect;
+export type InsertFavorite = z.infer<typeof insertFavoriteSchema>;

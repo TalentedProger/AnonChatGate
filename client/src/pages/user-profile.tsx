@@ -21,7 +21,7 @@ interface UserProfile {
 // Section component (same as profile.tsx)
 function Section({ title, children, locked }: { title: string; children: React.ReactNode; locked?: boolean }) {
   return (
-    <Card className="w-full bg-white/5 border border-white/20 rounded-2xl overflow-hidden">
+    <Card className="w-full bg-zinc-800/90 border border-zinc-700 rounded-2xl overflow-hidden">
       <CardContent className="p-5 relative">
         <div className="flex items-center gap-2 mb-3">
           <h3 className="text-lg font-semibold text-white">{title}</h3>
@@ -37,7 +37,7 @@ function Section({ title, children, locked }: { title: string; children: React.R
 function MetricCard({ icon, value, label, borderColor }: { icon: React.ReactNode; value: string; label: string; borderColor: string }) {
   return (
     <motion.div 
-      className={`rounded-2xl p-4 flex flex-col items-center justify-center bg-white/5 border ${borderColor}`}
+      className={`rounded-2xl p-4 flex flex-col items-center justify-center bg-zinc-800/90 border ${borderColor}`}
       whileHover={{ scale: 1.02 }}
     >
       <div className="text-2xl mb-1">{icon}</div>
@@ -53,6 +53,8 @@ export default function UserProfilePage() {
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isFavorite, setIsFavorite] = useState(false);
+  const [favoriteLoading, setFavoriteLoading] = useState(false);
   const { topPadding } = useTelegramPadding();
 
   const userId = params?.userId;
@@ -82,6 +84,13 @@ export default function UserProfilePage() {
         } else {
           setError('Не удалось загрузить профиль');
         }
+        
+        // Check if user is in favorites
+        const favResponse = await apiRequest('GET', `/api/favorites/check/${userId}`);
+        if (favResponse.ok) {
+          const favData = await favResponse.json();
+          setIsFavorite(favData.isFavorite);
+        }
       } catch (err) {
         setError('Ошибка при загрузке профиля');
       } finally {
@@ -96,9 +105,32 @@ export default function UserProfilePage() {
     window.history.back();
   };
 
-  const handleFavorite = () => {
-    // TODO: Implement favorites functionality
-    console.log('Add to favorites:', userId);
+  const handleFavorite = async () => {
+    if (!userId || favoriteLoading) return;
+    
+    setFavoriteLoading(true);
+    try {
+      if (isFavorite) {
+        // Remove from favorites
+        const response = await apiRequest('DELETE', `/api/favorites/${userId}`);
+        if (response.ok) {
+          setIsFavorite(false);
+        }
+      } else {
+        // Add to favorites
+        const response = await apiRequest('POST', `/api/favorites/${userId}`);
+        if (response.ok) {
+          setIsFavorite(true);
+        } else {
+          const data = await response.json();
+          alert(data.error || 'Не удалось добавить в избранное');
+        }
+      }
+    } catch (err) {
+      console.error('Failed to toggle favorite:', err);
+    } finally {
+      setFavoriteLoading(false);
+    }
   };
 
   // Get avatar based on gender
@@ -125,7 +157,7 @@ export default function UserProfilePage() {
         <div className="fixed top-6 left-6 z-50">
           <button 
             onClick={handleBack}
-            className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 transition-colors"
+            className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors"
           >
             <ChevronLeft className="w-5 h-5 text-white" />
           </button>
@@ -152,7 +184,7 @@ export default function UserProfilePage() {
       <div className="fixed z-50" style={{ top: topPadding > 0 ? `${topPadding + 24}px` : '24px', left: '24px' }}>
         <button 
           onClick={handleBack}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md hover:bg-white/20 transition-colors"
+          className="w-10 h-10 flex items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 transition-colors"
         >
           <ChevronLeft className="w-5 h-5 text-white" />
         </button>
@@ -162,9 +194,14 @@ export default function UserProfilePage() {
       <div className="fixed z-50" style={{ top: topPadding > 0 ? `${topPadding + 24}px` : '24px', right: '24px' }}>
         <button 
           onClick={handleFavorite}
-          className="w-10 h-10 flex items-center justify-center rounded-full bg-white/10 backdrop-blur-md hover:bg-pink-500/30 transition-colors"
+          disabled={favoriteLoading}
+          className={`w-10 h-10 flex items-center justify-center rounded-full transition-colors ${
+            isFavorite 
+              ? 'bg-pink-500 hover:bg-pink-600' 
+              : 'bg-zinc-800 hover:bg-pink-500/30'
+          } ${favoriteLoading ? 'opacity-50' : ''}`}
         >
-          <Heart className="w-5 h-5 text-pink-400" />
+          <Heart className={`w-5 h-5 ${isFavorite ? 'text-white fill-white' : 'text-pink-400'}`} />
         </button>
       </div>
 
@@ -226,19 +263,19 @@ export default function UserProfilePage() {
           <Section title="Ссылки" locked>
             <div className="flex justify-center items-center gap-6 pb-2">
               <div className="flex flex-col items-center gap-2">
-                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center blur-sm">
+                <div className="w-12 h-12 rounded-full bg-zinc-700 flex items-center justify-center blur-sm">
                   <span className="text-cyan-400">TG</span>
                 </div>
                 <span className="text-xs text-gray-400">Telegram</span>
               </div>
               <div className="flex flex-col items-center gap-2">
-                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center blur-sm">
+                <div className="w-12 h-12 rounded-full bg-zinc-700 flex items-center justify-center blur-sm">
                   <span className="text-blue-500">VK</span>
                 </div>
                 <span className="text-xs text-gray-400">Vkontakte</span>
               </div>
               <div className="flex flex-col items-center gap-2">
-                <div className="w-12 h-12 rounded-full bg-white/10 flex items-center justify-center blur-sm">
+                <div className="w-12 h-12 rounded-full bg-zinc-700 flex items-center justify-center blur-sm">
                   <span className="text-violet-400">IG</span>
                 </div>
                 <span className="text-xs text-gray-400">Instagram</span>
@@ -252,7 +289,7 @@ export default function UserProfilePage() {
               {[0, 1, 2].map((i) => (
                 <div
                   key={i}
-                  className="rounded-xl overflow-hidden border border-white/30 flex items-center justify-center bg-white/5 aspect-[3/4] blur-sm"
+                  className="rounded-xl overflow-hidden border border-zinc-600 flex items-center justify-center bg-zinc-800 aspect-[3/4] blur-sm"
                 >
                   <span className="text-white/30 text-4xl">?</span>
                 </div>
