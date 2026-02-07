@@ -14,10 +14,32 @@ const BOT_DISABLED_THRESHOLD = 10; // After 10 consecutive errors, reduce loggin
 
 // Properly construct webapp URL without double protocol
 function getWebAppUrl(): string {
-  let url = process.env.WEBAPP_URL || process.env.REPLIT_DOMAINS?.split(',')[0] || 'localhost:5000';
+  const isProduction = process.env.NODE_ENV === 'production';
+  
+  // Get URL from environment
+  let url = process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || process.env.REPLIT_DOMAINS?.split(',')[0];
+  
+  // In production, WEBAPP_URL is required
+  if (!url && isProduction) {
+    logger.error('[Telegram Bot] WEBAPP_URL is not set! Bot inline buttons will not work.');
+    logger.error('[Telegram Bot] Please set WEBAPP_URL environment variable on Render.');
+    // Use a placeholder that will show an error but not crash
+    return 'https://example.com/webapp-url-not-configured';
+  }
+  
+  // Fallback for development only
+  if (!url) {
+    url = 'localhost:5000';
+  }
   
   // Remove any existing protocol to avoid double prefixing
   url = url.replace(/^https?:\/\//, '');
+  
+  // Don't use localhost in production
+  if (isProduction && url.includes('localhost')) {
+    logger.error('[Telegram Bot] Cannot use localhost URL in production!');
+    return 'https://example.com/webapp-url-not-configured';
+  }
   
   // Add version parameter to prevent caching issues
   const version = Date.now();
