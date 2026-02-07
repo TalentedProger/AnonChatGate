@@ -3,12 +3,14 @@ import { useAuth } from "@/lib/auth";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { logger } from "@/lib/logger";
 import entryLogo from "@/assets/entry_logo.png";
+import { useTelegramPadding } from "@/hooks/useTelegramPadding";
 
 export default function EntryPage() {
   const [, setLocation] = useLocation();
   const auth = useAuth();
   const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const { topPadding } = useTelegramPadding();
   
   // Slider state
   const [sliderPosition, setSliderPosition] = useState(0);
@@ -330,7 +332,7 @@ export default function EntryPage() {
   const progress = sliderPosition / (getMaxPosition() || 1);
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex flex-col px-4" style={{ paddingTop: 'var(--tg-safe-top, env(safe-area-inset-top, 0px))' }}>
+    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex flex-col px-4" style={{ paddingTop: topPadding > 0 ? `${topPadding}px` : undefined }}>
       <div className="w-full max-w-[400px] mx-auto flex flex-col items-center flex-1">
         {/* Center area with logo and headings - vertically centered */}
         <div className="w-full flex flex-col items-center justify-center flex-1">

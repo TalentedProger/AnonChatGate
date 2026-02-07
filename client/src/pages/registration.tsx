@@ -10,6 +10,7 @@ import { useLocation } from 'wouter';
 import { usernameSchema } from '@shared/schema';
 import { useAuth } from '@/lib/auth';
 import { apiRequest } from '@/lib/queryClient';
+import { useTelegramPadding } from '@/hooks/useTelegramPadding';
 import { z } from 'zod';
 
 interface RegistrationData {
@@ -34,6 +35,7 @@ const fileInputClasses = "w-full min-h-[48px] h-[48px] rounded-xl border-2 borde
 export default function RegistrationPage() {
   const [, setLocation] = useLocation();
   const auth = useAuth();
+  const { topPadding } = useTelegramPadding();
   const [currentStep, setCurrentStep] = useState(1);
   const totalSteps = 3;
   const [formData, setFormData] = useState<RegistrationData>({
@@ -322,7 +324,7 @@ export default function RegistrationPage() {
   };
 
   return (
-    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex flex-col items-center overflow-y-auto px-5 py-6" style={{ paddingTop: 'calc(var(--tg-safe-top, env(safe-area-inset-top, 0px)) + 24px)' }}>
+    <div className="min-h-screen w-full bg-gradient-to-b from-[#0A1A2F] to-black text-white flex flex-col items-center overflow-y-auto px-5 py-6" style={{ paddingTop: topPadding > 0 ? `${topPadding + 24}px` : '24px' }}>
       <div className="w-full max-w-[428px] flex items-start justify-center px-2 py-4 box-border">
         <div className="w-full max-w-[390px] rounded-3xl px-6 py-6 box-border bg-white/[0.08] backdrop-blur-xl shadow-[0_8px_32px_rgba(0,0,0,0.2)] flex flex-col relative border border-white/10">
           {/* Back button */}

@@ -1,32 +1,37 @@
-import BottomNavigation from './bottom-navigation';
-import { useLocation } from 'wouter';
-import { useEffect, useState } from 'react';
+import { useState, useEffect } from 'react';
 
-interface LayoutProps {
-  children: React.ReactNode;
-}
-
-export default function Layout({ children }: LayoutProps) {
-  const [location] = useLocation();
-  const isInChat = location === '/chat';
+/**
+ * Hook to get the appropriate top padding for Telegram Mini App
+ * Returns the total safe area (header + notch) or 56px fallback when in Telegram
+ */
+export function useTelegramPadding() {
   const [topPadding, setTopPadding] = useState(0);
+  const [bottomPadding, setBottomPadding] = useState(0);
+  const [isInTelegram, setIsInTelegram] = useState(false);
 
   useEffect(() => {
-    // Detect Telegram safe area / header height
     const tg = (window as any).Telegram?.WebApp;
     
     const updatePadding = () => {
       if (tg) {
+        setIsInTelegram(true);
+        
         // Telegram Mini Apps have safeAreaInset (for notches) and contentSafeAreaInset (for Telegram header)
         const safeTop = tg.safeAreaInset?.top || 0;
         const contentSafeTop = tg.contentSafeAreaInset?.top || 0;
         const totalTop = safeTop + contentSafeTop;
         
+        const safeBottom = tg.safeAreaInset?.bottom || 0;
+        const contentSafeBottom = tg.contentSafeAreaInset?.bottom || 0;
+        const totalBottom = safeBottom + contentSafeBottom;
+        
         // Use detected value or fallback to reasonable minimum (56px for Telegram header)
         setTopPadding(totalTop > 0 ? totalTop : 56);
+        setBottomPadding(totalBottom);
       } else {
-        // Not in Telegram - no padding needed
+        setIsInTelegram(false);
         setTopPadding(0);
+        setBottomPadding(0);
       }
     };
     
@@ -48,21 +53,5 @@ export default function Layout({ children }: LayoutProps) {
     };
   }, []);
 
-  return (
-    <div className="h-screen bg-background font-sans flex flex-col">
-      {/* Spacer for Telegram header/navigation buttons */}
-      {topPadding > 0 && (
-        <div 
-          className="shrink-0 bg-background" 
-          style={{ height: `${topPadding}px` }} 
-        />
-      )}
-      <div className="flex-1 overflow-y-auto">
-        {children}
-      </div>
-      
-      {/* Bottom Navigation - hidden in chat */}
-      {!isInChat && <BottomNavigation />}
-    </div>
-  );
+  return { topPadding, bottomPadding, isInTelegram };
 }
