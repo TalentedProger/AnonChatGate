@@ -64,15 +64,25 @@ try {
   throw new Error(`Invalid WEBAPP_URL format: ${WEBAPP_URL}`);
 }
 
-// Create bot with more resilient polling settings
+// Determine if polling should be enabled
+// In production, disable polling by default to avoid 409 conflicts
+// Use ENABLE_BOT_POLLING=true to explicitly enable it on one instance
+const isProduction = process.env.NODE_ENV === 'production';
+const enablePolling = process.env.ENABLE_BOT_POLLING === 'true' || !isProduction;
+
+if (!enablePolling) {
+  logger.info('[Telegram Bot] Polling disabled in production (set ENABLE_BOT_POLLING=true to enable on ONE instance)');
+}
+
+// Create bot with conditional polling
 const bot = new TelegramBot(BOT_TOKEN, { 
-  polling: {
-    interval: 1000, // Increased interval to reduce load on unstable connections
+  polling: enablePolling ? {
+    interval: 1000,
     autoStart: true,
     params: {
-      timeout: 30 // Longer timeout for better handling of slow connections
+      timeout: 30
     }
-  }
+  } : false
 });
 
 // Handle polling errors with exponential backoff and rate limiting

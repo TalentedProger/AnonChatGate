@@ -174,28 +174,46 @@ function verifyInitData(initData: string, botToken: string): boolean {
     }
     
     const hash = kv['hash'];
-    if (!hash) return false;
+    if (!hash) {
+      logger.warn('Init data verification failed: no hash field');
+      return false;
+    }
     
     // Validate auth_date - reject if older than 24 hours
     const authDate = parseInt(kv['auth_date'] || '0', 10);
     const now = Math.floor(Date.now() / 1000);
     
     if (!authDate || now - authDate > AUTH.INIT_DATA_MAX_AGE_SECONDS) {
-      logger.warn({ authDate, now, diff: now - authDate }, 'Init data expired or missing auth_date');
+      logger.warn({ authDate, now, diff: now - authDate, maxAge: AUTH.INIT_DATA_MAX_AGE_SECONDS }, 'Init data expired or missing auth_date');
       return false;
     }
     
+    // Build data-check-string per Telegram docs:
+    // sorted alphabetically, key=value pairs joined by \n, excluding 'hash'
     const keys = Object.keys(kv).filter(k => k !== 'hash').sort();
     const data_check_arr = keys.map(k => `${k}=${kv[k]}`);
     const data_check_string = data_check_arr.join('\n');
 
-    const secret = crypto.createHash('sha256').update(botToken).digest();
+    // CRITICAL: Per Telegram docs, secret_key = HMAC_SHA256(bot_token, "WebAppData")
+    // NOT just SHA256(bot_token)
+    // See: https://core.telegram.org/bots/webapps#validating-data-received-via-the-mini-app
+    const secret = crypto.createHmac('sha256', 'WebAppData').update(botToken).digest();
     const hmac = crypto.createHmac('sha256', secret).update(data_check_string).digest('hex');
 
-    return crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(hash, 'hex'));
+    const isValid = crypto.timingSafeEqual(Buffer.from(hmac, 'hex'), Buffer.from(hash, 'hex'));
+    
+    if (!isValid) {
+      logger.warn({
+        dataCheckFields: keys,
+        authDate,
+        timeDiff: now - authDate,
+      }, 'Init data HMAC verification failed - hash mismatch');
+    }
+    
+    return isValid;
   } catch (error) {
     if (error instanceof Error) {
-      logger.debug({ error: error.message }, 'Init data verification error');
+      logger.error({ error: error.message }, 'Init data verification error');
     }
     return false;
   }
@@ -316,6 +334,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       logger.debug({
         hasInitData: !!initData,
         initDataLength: initData?.length || 0,
+        contentType: req.headers['content-type'],
       }, 'Auth request received');
       
       if (!initData) {
