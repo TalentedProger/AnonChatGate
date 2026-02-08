@@ -12,7 +12,7 @@ import cors from "cors";
 import rateLimit from "express-rate-limit";
 import { registerRoutes } from "./routes";
 import { setupVite, serveStatic, log } from "./vite";
-import { db } from "./db";
+import { db, runMigrations } from "./db";
 import { users, rooms } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { logger, logRequest, logError } from "./logger";
@@ -235,7 +235,13 @@ app.use((req, res, next) => {
 });
 
 (async () => {
-  // Database will be initialized on demand through storage operations
+  // Run database migrations automatically
+  try {
+    await runMigrations();
+  } catch (error) {
+    logger.error({ error }, 'Failed to run migrations');
+    log("Warning: Migration error:", String(error));
+  }
 
   // Initialize Telegram bot
   try {

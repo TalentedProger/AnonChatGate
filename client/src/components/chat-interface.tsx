@@ -5,6 +5,47 @@ import chatBackgroundGalaxy from '@/assets/chat_background_galaxy.jpg';
 import mainGroupInternal from '@/assets/main_group_internal.jpg';
 import type { ChatUser, ChatMessage } from '@/types';
 
+// Parse legacy reply formats from old messages (backward compatibility)
+// Returns clean content and any legacy reply data found in the content
+function parseLegacyReply(content: string): { cleanContent: string; legacyReply: { anonName: string; content: string } | null } {
+  // Format 1: [REPLY:{"id":1,"anonName":"User","content":"text"}]actual content
+  const jsonMatch = content.match(/^\[REPLY:\{.*?\}\]\n?([\s\S]*)/);
+  if (jsonMatch) {
+    try {
+      const jsonStr = content.match(/^\[REPLY:(\{.*?\})\]/)?.[1];
+      if (jsonStr) {
+        const parsed = JSON.parse(jsonStr);
+        return {
+          cleanContent: jsonMatch[1].trim(),
+          legacyReply: { anonName: parsed.anonName || 'Неизвестный', content: parsed.content || '' }
+        };
+      }
+    } catch {
+      // JSON parse failed, try other formats
+    }
+  }
+  
+  // Format 2: ↩️ @Username: "quoted text"\n\nactual content
+  const emojiMatch = content.match(/^↩️\s*@([^:]+):\s*[""]([^""]+)[""]\s*\n\n([\s\S]*)/);
+  if (emojiMatch) {
+    return {
+      cleanContent: emojiMatch[3].trim(),
+      legacyReply: { anonName: emojiMatch[1].trim(), content: emojiMatch[2].trim() }
+    };
+  }
+  
+  // Format 3: With &quot; escaping
+  const escapedMatch = content.match(/^↩️\s*@([^:]+):\s*&quot;([^&]+)&quot;\s*\n\n([\s\S]*)/);
+  if (escapedMatch) {
+    return {
+      cleanContent: escapedMatch[3].trim(),
+      legacyReply: { anonName: escapedMatch[1].trim(), content: escapedMatch[2].trim() }
+    };
+  }
+  
+  return { cleanContent: content, legacyReply: null };
+}
+
 // Format date for date separator
 function formatDateSeparator(dateString: string): string {
   const date = new Date(dateString);
@@ -148,8 +189,9 @@ export default function ChatInterface({
   
   // Copy message to clipboard
   const handleCopyMessage = useCallback((message: ChatMessage) => {
-    // Just copy the message content directly (no parsing needed)
-    navigator.clipboard.writeText(message.content);
+    // Parse legacy reply format to get clean content
+    const { cleanContent } = parseLegacyReply(message.content);
+    navigator.clipboard.writeText(cleanContent);
     setContextMenuMessage(null);
     // Vibrate feedback
     if (navigator.vibrate) {
@@ -445,8 +487,18 @@ export default function ChatInterface({
             const isCurrentUser = message.user?.id === user.id;
             const currentOffset = swipeOffset[message.id] || 0;
             
-            // Reply data from database fields (NOT parsed from content)
-            const hasReply = !!(message.replyToId && message.replyToAnonName);
+            // Check for reply data: first from new DB fields, then from legacy content format
+            const hasNewReply = !!(message.replyToId && message.replyToAnonName);
+            const { cleanContent, legacyReply } = parseLegacyReply(message.content);
+            
+            // Use new DB fields if available, otherwise fall back to legacy parsed data
+            const replyAnonName = hasNewReply ? message.replyToAnonName : legacyReply?.anonName;
+            const replyContent = hasNewReply ? message.replyToContent : legacyReply?.content;
+            const replyId = hasNewReply ? message.replyToId : null;
+            const hasReply = !!(replyAnonName);
+            
+            // Display content: use clean content if we found legacy reply, otherwise use as-is
+            const displayContent = legacyReply ? cleanContent : message.content;
             
             // Check if we need to show date separator
             const currentDateKey = getDateKey(message.createdAt);
@@ -555,18 +607,24 @@ export default function ChatInterface({
                         {/* Reply Preview - shown inside message if this is a reply */}
                         {hasReply && (
                           <div 
-                            className={`mb-2 pl-2 border-l-2 cursor-pointer ${isCurrentUser ? 'border-blue-300' : 'border-violet-500'}`}
-                            onClick={() => scrollToMessage(message.replyToId!)}
+                            className={`mb-2 pl-2 border-l-2 ${replyId ? 'cursor-pointer' : ''} ${isCurrentUser ? 'border-blue-300' : 'border-violet-500'}`}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (replyId) scrollToMessage(replyId);
+                            }}
+                            onTouchEnd={(e) => {
+                              // Allow touch events to bubble for long-press detection
+                            }}
                           >
                             <p className={`text-xs font-medium ${isCurrentUser ? 'text-blue-200' : 'text-violet-400'}`}>
-                              {message.replyToAnonName}
+                              {replyAnonName}
                             </p>
                             <p className={`text-xs ${isCurrentUser ? 'text-blue-100/70' : 'text-zinc-400'} line-clamp-1`}>
-                              {message.replyToContent}
+                              {replyContent}
                             </p>
                           </div>
                         )}
-                        <p className="text-sm whitespace-pre-wrap break-words select-none">{message.content}</p>
+                        <p className="text-sm whitespace-pre-wrap break-words select-none">{displayContent}</p>
                       </div>
                     </div>
                   </div>
@@ -601,13 +659,15 @@ export default function ChatInterface({
           />
         )}
         
-        {/* Context Menu for Long Press - positioned directly below message */}
+        {/* Context Menu for Long Press - positioned at right edge of message, above it */}
         {contextMenuMessage && (
           <div 
             className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 min-w-[160px]"
             style={{ 
-              left: Math.min(Math.max(contextMenuPosition.x - 80, 16), window.innerWidth - 176), 
-              top: Math.min(contextMenuPosition.y, window.innerHeight - 120)
+              // Right edge of menu aligned with right edge of message
+              right: Math.max(window.innerWidth - contextMenuPosition.x, 16),
+              // Position above message with small gap, ensure it doesn't go off screen
+              top: Math.max(contextMenuPosition.y - 100, 16)
             }}
             onClick={(e) => e.stopPropagation()}
           >
