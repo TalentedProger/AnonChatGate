@@ -193,12 +193,17 @@ process.once('SIGTERM', () => {
 
 // Anonymous names are now auto-generated in storage as Student_{id}
 
+// Log when bot handlers are registered
+logger.info('[Telegram Bot] Registering message handlers...');
+
 // Handle all messages (including /start and other commands)
 bot.on('message', async (msg) => {
   const chatId = msg.chat.id;
   const userId = BigInt(msg.from?.id || 0);
   const username = msg.from?.username;
   const messageText = msg.text?.toLowerCase();
+  
+  logger.info({ chatId, userId: userId.toString(), messageText }, '[Telegram Bot] Received message');
 
   try {
     // Handle /start command or when user wants to access the app

@@ -1,33 +1,56 @@
 import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
-import { Send, ChevronLeft, Check, CheckCheck, Menu, Reply, X } from 'lucide-react';
+import { Send, ChevronLeft, Check, CheckCheck, Menu, Reply, X, Copy } from 'lucide-react';
 import { useLocation } from 'wouter';
 import chatBackgroundGalaxy from '@/assets/chat_background_galaxy.jpg';
 import mainGroupInternal from '@/assets/main_group_internal.jpg';
 import type { ChatUser, ChatMessage } from '@/types';
 
-// Parse reply from message content - checks if message starts with reply format
-function parseReplyFromContent(content: string): { replyTo: { anonName: string; content: string } | null; actualContent: string } {
-  // Check for reply prefix format: ↩️ @username: "quoted text"\n\n
-  const replyRegex = /^↩️\s*@([^:]+):\s*[""]([^""]+)[""]\s*\n\n/;
+// Reply data stored as JSON at start of message
+interface ReplyData {
+  id: number;
+  anonName: string;
+  content: string;
+}
+
+// Parse reply from message content - checks if message starts with JSON reply format
+function parseReplyFromContent(content: string): { replyTo: ReplyData | null; actualContent: string } {
+  // Check for JSON reply format: [REPLY:{"id":1,"anonName":"User","content":"text"}]
+  const replyRegex = /^\[REPLY:(.*?)\]\n?/;
   const match = content.match(replyRegex);
   
   if (match) {
+    try {
+      const replyData = JSON.parse(match[1]) as ReplyData;
+      return {
+        replyTo: replyData,
+        actualContent: content.replace(replyRegex, '').trim()
+      };
+    } catch {
+      // Invalid JSON, treat as normal message
+    }
+  }
+  
+  // Fallback: Check for old text format and parse it
+  const oldReplyRegex = /^↩️\s*@([^:]+):\s*[""]([^""]+)[""]\s*\n\n/;
+  const oldMatch = content.match(oldReplyRegex);
+  if (oldMatch) {
     return {
       replyTo: {
-        anonName: match[1].trim(),
-        content: match[2].trim()
+        id: 0,
+        anonName: oldMatch[1].trim(),
+        content: oldMatch[2].trim()
       },
-      actualContent: content.replace(replyRegex, '').trim()
+      actualContent: content.replace(oldReplyRegex, '').trim()
     };
   }
   
-  // Also check for &quot; escaped format
+  // Check for &quot; escaped format
   const escapedReplyRegex = /^↩️\s*@([^:]+):\s*&quot;([^&]+)&quot;\s*\n\n/;
   const escapedMatch = content.match(escapedReplyRegex);
-  
   if (escapedMatch) {
     return {
       replyTo: {
+        id: 0,
         anonName: escapedMatch[1].trim(),
         content: escapedMatch[2].trim()
       },
@@ -160,19 +183,42 @@ export default function ChatInterface({
     setReplyingTo(null);
   }, []);
   
+  // Copy message to clipboard
+  const handleCopyMessage = useCallback((message: ChatMessage) => {
+    const { actualContent } = parseReplyFromContent(message.content);
+    navigator.clipboard.writeText(actualContent);
+    setContextMenuMessage(null);
+    // Vibrate feedback
+    if (navigator.vibrate) {
+      navigator.vibrate(10);
+    }
+  }, []);
+  
   // Touch handlers for swipe-to-reply with animation
   const handleTouchStart = useCallback((e: React.TouchEvent, message: ChatMessage) => {
     touchStartX.current = e.touches[0].clientX;
     touchCurrentX.current = e.touches[0].clientX;
     swipingMessageId.current = message.id;
     
-    // Long press timer for context menu
+    // Long press timer for context menu - get message element position
     longPressTimer.current = setTimeout(() => {
-      const rect = (e.target as HTMLElement).getBoundingClientRect();
-      setContextMenuPosition({ x: rect.left + rect.width / 2, y: rect.top });
+      // Find the message bubble element
+      const target = e.target as HTMLElement;
+      const messageBubble = target.closest('[data-message-bubble]');
+      if (messageBubble) {
+        const rect = messageBubble.getBoundingClientRect();
+        setContextMenuPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+      } else {
+        const rect = target.getBoundingClientRect();
+        setContextMenuPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+      }
       setContextMenuMessage(message);
       swipingMessageId.current = null;
       setSwipeOffset(prev => ({ ...prev, [message.id]: 0 }));
+      // Vibrate on context menu open
+      if (navigator.vibrate) {
+        navigator.vibrate(20);
+      }
     }, 500);
   }, []);
   
@@ -266,10 +312,14 @@ export default function ChatInterface({
     const content = messageText.trim();
     if (!content || !isConnected) return;
 
-    // If replying, prepend reply reference to message
+    // If replying, prepend reply data as JSON
     if (replyingTo) {
-      const replyPrefix = `↩️ @${replyingTo.user?.anonName || 'Неизвестный'}: "${replyingTo.content.substring(0, 50)}${replyingTo.content.length > 50 ? '...' : ''}"\n\n`;
-      onSendMessage(replyPrefix + content);
+      const replyData: ReplyData = {
+        id: replyingTo.id,
+        anonName: replyingTo.user?.anonName || 'Неизвестный',
+        content: replyingTo.content.substring(0, 100)
+      };
+      onSendMessage(`[REPLY:${JSON.stringify(replyData)}]\n${content}`);
       setReplyingTo(null);
     } else {
       onSendMessage(content);
@@ -538,11 +588,14 @@ export default function ChatInterface({
                         </button>
                       </div>
                       
-                      <div className={`rounded-lg px-3 py-2 mb-3 ${
-                        isCurrentUser 
-                          ? 'bg-blue-600/95 text-white rounded-tl-sm backdrop-blur-sm' 
-                          : 'bg-zinc-800/95 border border-zinc-700 rounded-tl-sm text-white backdrop-blur-sm'
-                      }`}>
+                      <div 
+                        data-message-bubble
+                        className={`rounded-lg px-3 py-2 mb-3 select-none ${
+                          isCurrentUser 
+                            ? 'bg-blue-600/95 text-white rounded-tl-sm backdrop-blur-sm' 
+                            : 'bg-zinc-800/95 border border-zinc-700 rounded-tl-sm text-white backdrop-blur-sm'
+                        }`}
+                      >
                         {/* Reply Preview - shown inside message if this is a reply */}
                         {replyTo && (
                           <div className={`mb-2 pl-2 border-l-2 ${isCurrentUser ? 'border-blue-300' : 'border-violet-500'}`}>
@@ -554,7 +607,7 @@ export default function ChatInterface({
                             </p>
                           </div>
                         )}
-                        <p className="text-sm whitespace-pre-wrap break-words">{actualContent}</p>
+                        <p className="text-sm whitespace-pre-wrap break-words select-none">{actualContent}</p>
                       </div>
                     </div>
                   </div>
@@ -581,22 +634,37 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
         </div>
         
+        {/* Context Menu Overlay with Blur */}
+        {contextMenuMessage && (
+          <div 
+            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+            onClick={() => setContextMenuMessage(null)}
+          />
+        )}
+        
         {/* Context Menu for Long Press */}
         {contextMenuMessage && (
           <div 
-            className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-lg shadow-xl overflow-hidden animate-in fade-in zoom-in-95 duration-200"
+            className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 min-w-[160px]"
             style={{ 
-              left: Math.min(contextMenuPosition.x - 60, window.innerWidth - 130), 
-              top: Math.max(contextMenuPosition.y - 40, 60)
+              left: Math.min(Math.max(contextMenuPosition.x - 80, 16), window.innerWidth - 176), 
+              top: Math.min(contextMenuPosition.y, window.innerHeight - 120)
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <button
               onClick={() => handleReply(contextMenuMessage)}
+              className="flex items-center gap-3 px-4 py-3 w-full hover:bg-zinc-700 transition-colors text-white border-b border-zinc-700"
+            >
+              <Reply className="w-5 h-5 text-violet-400" />
+              <span className="text-sm font-medium">Ответить</span>
+            </button>
+            <button
+              onClick={() => handleCopyMessage(contextMenuMessage)}
               className="flex items-center gap-3 px-4 py-3 w-full hover:bg-zinc-700 transition-colors text-white"
             >
-              <Reply className="w-4 h-4 text-violet-400" />
-              <span className="text-sm">Ответить</span>
+              <Copy className="w-5 h-5 text-blue-400" />
+              <span className="text-sm font-medium">Копировать</span>
             </button>
           </div>
         )}

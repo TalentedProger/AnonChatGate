@@ -79,7 +79,7 @@ export default function ChatsPage() {
                       Участников: <span className="text-green-400 font-medium">{statistics?.totalUsers || 0}</span> • 
                       Онлайн: <span className="text-blue-400 font-medium">{statistics?.onlineUsers || 0}</span>
                     </p>
-                    <p className="text-sm text-zinc-300 truncate max-w-[200px] overflow-hidden text-ellipsis whitespace-nowrap" data-testid="text-last-message">
+                    <p className="text-sm text-zinc-300 truncate max-w-[250px] overflow-hidden text-ellipsis whitespace-nowrap" data-testid="text-last-message">
                       {loading ? (
                         <span className="text-zinc-500">Загрузка...</span>
                       ) : lastMessage ? (
