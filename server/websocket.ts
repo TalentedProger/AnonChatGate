@@ -379,7 +379,7 @@ export function setupWebSocket(server: Server) {
         return;
       }
 
-      const { content, roomId } = message;
+      const { content, roomId, replyTo } = message;
       
       // Validate message using insertMessageSchema
       const globalRoom = await storage.getOrCreateGlobalRoom();
@@ -429,11 +429,29 @@ export function setupWebSocket(server: Server) {
         return;
       }
 
-      const newMessage = await storage.createMessage({
+      // Prepare message data with optional reply fields
+      const createMessageData: {
+        content: string;
+        userId: number;
+        roomId: number;
+        replyToId?: number;
+        replyToAnonName?: string;
+        replyToContent?: string;
+      } = {
         content: sanitizedContent,
         userId: ws.userId,
         roomId: targetRoomId
-      });
+      };
+
+      // Add reply data if replying to a message
+      if (replyTo && replyTo.id) {
+        createMessageData.replyToId = replyTo.id;
+        createMessageData.replyToAnonName = replyTo.anonName || 'Неизвестный';
+        // Truncate reply content to 100 chars
+        createMessageData.replyToContent = (replyTo.content || '').substring(0, 100);
+      }
+
+      const newMessage = await storage.createMessage(createMessageData);
 
       logWebSocket('message_sent', ws.userId, { 
         messageId: newMessage.id, 
@@ -448,6 +466,9 @@ export function setupWebSocket(server: Server) {
         message: {
           id: newMessage.id,
           content: newMessage.content,
+          replyToId: newMessage.replyToId,
+          replyToAnonName: newMessage.replyToAnonName,
+          replyToContent: newMessage.replyToContent,
           createdAt: newMessage.createdAt,
           user: {
             id: user?.id,

@@ -457,7 +457,7 @@ export default function ChatPage() {
     }, TYPING_TIMEOUT);
   };
 
-  const handleSendMessage = (content: string) => {
+  const handleSendMessage = (content: string, replyTo?: { id: number; anonName: string; content: string }) => {
     if (wsRef.current && isConnected) {
       // Stop typing indicator
       if (typingTimeoutRef.current) {
@@ -465,11 +465,12 @@ export default function ChatPage() {
       }
       sendTypingEnd();
 
-      // Send message
+      // Send message with optional reply data
       wsRef.current.send(JSON.stringify({
         type: 'send_message',
         content,
-        roomId
+        roomId,
+        replyTo
       }));
     }
   };

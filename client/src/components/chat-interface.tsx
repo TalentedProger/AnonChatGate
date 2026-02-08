@@ -5,62 +5,6 @@ import chatBackgroundGalaxy from '@/assets/chat_background_galaxy.jpg';
 import mainGroupInternal from '@/assets/main_group_internal.jpg';
 import type { ChatUser, ChatMessage } from '@/types';
 
-// Reply data stored as JSON at start of message
-interface ReplyData {
-  id: number;
-  anonName: string;
-  content: string;
-}
-
-// Parse reply from message content - checks if message starts with JSON reply format
-function parseReplyFromContent(content: string): { replyTo: ReplyData | null; actualContent: string } {
-  // Check for JSON reply format: [REPLY:{"id":1,"anonName":"User","content":"text"}]
-  const replyRegex = /^\[REPLY:(.*?)\]\n?/;
-  const match = content.match(replyRegex);
-  
-  if (match) {
-    try {
-      const replyData = JSON.parse(match[1]) as ReplyData;
-      return {
-        replyTo: replyData,
-        actualContent: content.replace(replyRegex, '').trim()
-      };
-    } catch {
-      // Invalid JSON, treat as normal message
-    }
-  }
-  
-  // Fallback: Check for old text format and parse it
-  const oldReplyRegex = /^↩️\s*@([^:]+):\s*[""]([^""]+)[""]\s*\n\n/;
-  const oldMatch = content.match(oldReplyRegex);
-  if (oldMatch) {
-    return {
-      replyTo: {
-        id: 0,
-        anonName: oldMatch[1].trim(),
-        content: oldMatch[2].trim()
-      },
-      actualContent: content.replace(oldReplyRegex, '').trim()
-    };
-  }
-  
-  // Check for &quot; escaped format
-  const escapedReplyRegex = /^↩️\s*@([^:]+):\s*&quot;([^&]+)&quot;\s*\n\n/;
-  const escapedMatch = content.match(escapedReplyRegex);
-  if (escapedMatch) {
-    return {
-      replyTo: {
-        id: 0,
-        anonName: escapedMatch[1].trim(),
-        content: escapedMatch[2].trim()
-      },
-      actualContent: content.replace(escapedReplyRegex, '').trim()
-    };
-  }
-  
-  return { replyTo: null, actualContent: content };
-}
-
 // Format date for date separator
 function formatDateSeparator(dateString: string): string {
   const date = new Date(dateString);
@@ -89,10 +33,17 @@ function getDateKey(dateString: string): string {
   return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
 }
 
+// Reply data for sending messages
+interface ReplyTo {
+  id: number;
+  anonName: string;
+  content: string;
+}
+
 interface ChatInterfaceProps {
   user: ChatUser;
   messages: ChatMessage[];
-  onSendMessage: (content: string) => void;
+  onSendMessage: (content: string, replyTo?: ReplyTo) => void;
   onInputChange?: () => void;
   onLoadMore?: () => void;
   hasMoreMessages?: boolean;
@@ -155,6 +106,7 @@ export default function ChatInterface({
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [contextMenuMessage, setContextMenuMessage] = useState<ChatMessage | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   
   // Touch/swipe state for reply with animation
   const touchStartX = useRef<number>(0);
@@ -166,6 +118,17 @@ export default function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  
+  // Scroll to a specific message when clicking on reply container
+  const scrollToMessage = useCallback((messageId: number) => {
+    const messageElement = document.querySelector(`[data-message-id="${messageId}"]`);
+    if (messageElement) {
+      messageElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      // Highlight the message for 2 seconds
+      setHighlightedMessageId(messageId);
+      setTimeout(() => setHighlightedMessageId(null), 2000);
+    }
+  }, []);
   
   // Handle reply to message
   const handleReply = useCallback((message: ChatMessage) => {
@@ -185,8 +148,8 @@ export default function ChatInterface({
   
   // Copy message to clipboard
   const handleCopyMessage = useCallback((message: ChatMessage) => {
-    const { actualContent } = parseReplyFromContent(message.content);
-    navigator.clipboard.writeText(actualContent);
+    // Just copy the message content directly (no parsing needed)
+    navigator.clipboard.writeText(message.content);
     setContextMenuMessage(null);
     // Vibrate feedback
     if (navigator.vibrate) {
@@ -312,14 +275,14 @@ export default function ChatInterface({
     const content = messageText.trim();
     if (!content || !isConnected) return;
 
-    // If replying, prepend reply data as JSON
+    // If replying, pass reply data as separate parameter
     if (replyingTo) {
-      const replyData: ReplyData = {
+      const replyTo: ReplyTo = {
         id: replyingTo.id,
         anonName: replyingTo.user?.anonName || 'Неизвестный',
         content: replyingTo.content.substring(0, 100)
       };
-      onSendMessage(`[REPLY:${JSON.stringify(replyData)}]\n${content}`);
+      onSendMessage(content, replyTo);
       setReplyingTo(null);
     } else {
       onSendMessage(content);
@@ -482,8 +445,8 @@ export default function ChatInterface({
             const isCurrentUser = message.user?.id === user.id;
             const currentOffset = swipeOffset[message.id] || 0;
             
-            // Parse reply from message content
-            const { replyTo, actualContent } = parseReplyFromContent(message.content);
+            // Reply data from database fields (NOT parsed from content)
+            const hasReply = !!(message.replyToId && message.replyToAnonName);
             
             // Check if we need to show date separator
             const currentDateKey = getDateKey(message.createdAt);
@@ -491,8 +454,14 @@ export default function ChatInterface({
             const previousDateKey = previousMessage ? getDateKey(previousMessage.createdAt) : null;
             const showDateSeparator = currentDateKey !== previousDateKey;
             
+            const isHighlighted = highlightedMessageId === message.id;
+            
             return (
-              <div key={`${message.id}-${message.createdAt}`}>
+              <div 
+                key={`${message.id}-${message.createdAt}`} 
+                data-message-id={message.id}
+                className={`transition-all duration-500 rounded-lg ${isHighlighted ? 'bg-violet-500/20' : ''}`}
+              >
                 {/* Date Separator */}
                 {showDateSeparator && (
                   <div className="flex justify-center my-4">
@@ -509,20 +478,7 @@ export default function ChatInterface({
                   onTouchMove={(e) => handleTouchMove(e, message)}
                   onTouchEnd={() => handleTouchEnd(message)}
                 >
-                  {/* Reply indicator that appears during swipe */}
-                  <div 
-                    className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center justify-center transition-opacity duration-150"
-                    style={{ 
-                      opacity: currentOffset > 20 ? Math.min((currentOffset - 20) / 30, 1) : 0,
-                      transform: `translateX(${Math.max(0, currentOffset - 60)}px)`
-                    }}
-                  >
-                    <div className="w-8 h-8 rounded-full bg-violet-500/80 flex items-center justify-center">
-                      <Reply className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                  
-                  {/* Message container with swipe animation */}
+                  {/* Message container with swipe animation - NO purple indicator */}
                   <div 
                     className="flex items-start space-x-3 w-full transition-transform"
                     style={{ 
@@ -597,17 +553,20 @@ export default function ChatInterface({
                         }`}
                       >
                         {/* Reply Preview - shown inside message if this is a reply */}
-                        {replyTo && (
-                          <div className={`mb-2 pl-2 border-l-2 ${isCurrentUser ? 'border-blue-300' : 'border-violet-500'}`}>
+                        {hasReply && (
+                          <div 
+                            className={`mb-2 pl-2 border-l-2 cursor-pointer ${isCurrentUser ? 'border-blue-300' : 'border-violet-500'}`}
+                            onClick={() => scrollToMessage(message.replyToId!)}
+                          >
                             <p className={`text-xs font-medium ${isCurrentUser ? 'text-blue-200' : 'text-violet-400'}`}>
-                              {replyTo.anonName}
+                              {message.replyToAnonName}
                             </p>
                             <p className={`text-xs ${isCurrentUser ? 'text-blue-100/70' : 'text-zinc-400'} line-clamp-1`}>
-                              {replyTo.content}
+                              {message.replyToContent}
                             </p>
                           </div>
                         )}
-                        <p className="text-sm whitespace-pre-wrap break-words select-none">{actualContent}</p>
+                        <p className="text-sm whitespace-pre-wrap break-words select-none">{message.content}</p>
                       </div>
                     </div>
                   </div>
@@ -634,15 +593,15 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
         </div>
         
-        {/* Context Menu Overlay with Blur */}
+        {/* Context Menu Overlay - no blur, semi-transparent */}
         {contextMenuMessage && (
           <div 
-            className="fixed inset-0 z-40 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+            className="fixed inset-0 z-40 bg-black/50 animate-in fade-in duration-200"
             onClick={() => setContextMenuMessage(null)}
           />
         )}
         
-        {/* Context Menu for Long Press */}
+        {/* Context Menu for Long Press - positioned directly below message */}
         {contextMenuMessage && (
           <div 
             className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 min-w-[160px]"

@@ -54,6 +54,10 @@ export interface ChatMessage {
   user: ChatUser | null;
   deliveredTo?: number[];
   readBy?: number[];
+  // Reply fields - stored separately, not embedded in content
+  replyToId?: number | null;
+  replyToAnonName?: string | null;
+  replyToContent?: string | null;
 }
 
 // ============================================================================

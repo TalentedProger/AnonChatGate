@@ -36,6 +36,10 @@ export const messages = pgTable("messages", {
   roomId: integer("room_id").references(() => rooms.id).notNull(),
   userId: integer("user_id").references(() => users.id),
   content: text("content").notNull(),
+  // Reply fields - stored separately, not embedded in content
+  replyToId: integer("reply_to_id"),             // ID of the message being replied to
+  replyToAnonName: text("reply_to_anon_name"),   // Name of user who wrote the replied message
+  replyToContent: text("reply_to_content"),      // Truncated content of replied message
   deliveredTo: integer("delivered_to").array(),  // Array of user IDs who received the message
   readBy: integer("read_by").array(),            // Array of user IDs who read the message
   createdAt: timestamp("created_at").defaultNow().notNull(),

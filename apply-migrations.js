@@ -50,6 +50,14 @@ async function applyMigrations() {
     await client.query(migration3Sql);
     console.log('✅ Migration 003 applied successfully');
 
+    // Apply migration 008 - Add reply columns
+    const migration8Path = join(__dirname, 'migrations', '008_add_reply_columns.sql');
+    const migration8Sql = readFileSync(migration8Path, 'utf8');
+
+    console.log('🔄 Applying migration: 008_add_reply_columns.sql');
+    await client.query(migration8Sql);
+    console.log('✅ Migration 008 applied successfully');
+
     // Verify indexes were created
     console.log('\n📊 Verifying indexes...');
     
