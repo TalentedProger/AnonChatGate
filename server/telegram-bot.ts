@@ -91,6 +91,12 @@ try {
 const useWebhook = isProduction || process.env.USE_WEBHOOK === 'true';
 const enablePolling = !useWebhook && process.env.ENABLE_BOT_POLLING !== 'false';
 
+// Warn if ENABLE_BOT_POLLING is set in production (it's ignored)
+if (isProduction && process.env.ENABLE_BOT_POLLING === 'true') {
+  logger.warn('[Telegram Bot] ENABLE_BOT_POLLING=true is IGNORED in production - webhook is always used');
+  logger.warn('[Telegram Bot] Remove ENABLE_BOT_POLLING from production environment variables');
+}
+
 logger.info(`[Telegram Bot] Environment: NODE_ENV=${process.env.NODE_ENV}, isProduction=${isProduction}`);
 logger.info(`[Telegram Bot] Mode: ${useWebhook ? 'WEBHOOK' : 'POLLING'}`);
 
