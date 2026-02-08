@@ -12,18 +12,21 @@ let lastErrorTime = 0;
 const MAX_ERROR_LOG_INTERVAL = 60000; // Only log detailed errors once per minute
 const BOT_DISABLED_THRESHOLD = 10; // After 10 consecutive errors, reduce logging
 
+// Environment detection
+const isProduction = process.env.NODE_ENV === 'production';
+
 // Properly construct webapp URL without double protocol
 function getWebAppUrl(): string {
-  const isProduction = process.env.NODE_ENV === 'production';
-  
-  // Get URL from environment
-  let url = process.env.WEBAPP_URL || process.env.RENDER_EXTERNAL_URL || process.env.REPLIT_DOMAINS?.split(',')[0];
+  // Get URL from environment - check Railway, Render, Replit and custom
+  let url = process.env.WEBAPP_URL || 
+            process.env.RAILWAY_PUBLIC_DOMAIN ||
+            process.env.RENDER_EXTERNAL_URL || 
+            process.env.REPLIT_DOMAINS?.split(',')[0];
   
   // In production, WEBAPP_URL is required
   if (!url && isProduction) {
     logger.error('[Telegram Bot] WEBAPP_URL is not set! Bot inline buttons will not work.');
-    logger.error('[Telegram Bot] Please set WEBAPP_URL environment variable on Render.');
-    // Use a placeholder that will show an error but not crash
+    logger.error('[Telegram Bot] Please set WEBAPP_URL environment variable.');
     return 'https://example.com/webapp-url-not-configured';
   }
   
@@ -49,7 +52,23 @@ function getWebAppUrl(): string {
   return `https://${url}${separator}v=${version}`;
 }
 
+// Get base URL without version parameter (for webhook)
+function getBaseUrl(): string {
+  let url = process.env.WEBAPP_URL || 
+            process.env.RAILWAY_PUBLIC_DOMAIN ||
+            process.env.RENDER_EXTERNAL_URL || 
+            process.env.REPLIT_DOMAINS?.split(',')[0];
+  
+  if (!url) return '';
+  
+  // Remove any existing protocol
+  url = url.replace(/^https?:\/\//, '');
+  
+  return `https://${url}`;
+}
+
 const WEBAPP_URL = getWebAppUrl();
+const BASE_URL = getBaseUrl();
 
 if (!BOT_TOKEN) {
   logger.warn('[Telegram Bot] TELEGRAM_BOT_TOKEN is not set - bot will not start');
@@ -64,33 +83,26 @@ try {
   throw new Error(`Invalid WEBAPP_URL format: ${WEBAPP_URL}`);
 }
 
-// Determine if polling should be enabled
-// In production, ALWAYS disable polling to avoid 409 conflicts
-// Polling is NOT needed for Telegram Mini Apps - they use initData authentication
-// Use ENABLE_BOT_POLLING=false to explicitly disable it in development
-const isProduction = process.env.NODE_ENV === 'production';
+// Determine bot mode: webhook (production) or polling (development)
+// In production: use webhook for reliability (works 24/7)
+// In development: use polling for easier testing
+// Can be overridden with ENABLE_BOT_POLLING=true or USE_WEBHOOK=true
 
-// In development, enable polling by default (unless explicitly disabled)
-// In production, NEVER enable polling - it causes 409 conflicts on multi-instance deployments
-const enablePolling = isProduction 
-  ? false 
-  : process.env.ENABLE_BOT_POLLING !== 'false';
+const useWebhook = isProduction || process.env.USE_WEBHOOK === 'true';
+const enablePolling = !useWebhook && process.env.ENABLE_BOT_POLLING !== 'false';
 
-// In production, NEVER enable polling - it causes 409 conflicts on multi-instance deployments
-if (isProduction && process.env.ENABLE_BOT_POLLING === 'true') {
-  logger.warn('[Telegram Bot] ENABLE_BOT_POLLING=true is IGNORED in production to prevent 409 conflicts');
-  logger.warn('[Telegram Bot] Telegram Mini Apps work without polling - authentication uses initData');
-}
+logger.info(`[Telegram Bot] Environment: NODE_ENV=${process.env.NODE_ENV}, isProduction=${isProduction}`);
+logger.info(`[Telegram Bot] Mode: ${useWebhook ? 'WEBHOOK' : 'POLLING'}`);
 
-logger.info(`[Telegram Bot] Environment: NODE_ENV=${process.env.NODE_ENV}, isProduction=${isProduction}, enablePolling=${enablePolling}`);
-
-if (!enablePolling) {
-  logger.info('[Telegram Bot] Polling DISABLED - Mini App authentication will still work via initData');
+if (useWebhook) {
+  logger.info('[Telegram Bot] Webhook mode - bot will receive updates via /api/telegram-webhook');
+} else if (enablePolling) {
+  logger.info('[Telegram Bot] Polling mode - bot will poll Telegram servers for updates');
 } else {
-  logger.info('[Telegram Bot] Polling ENABLED - bot will respond to messages');
+  logger.info('[Telegram Bot] Bot updates DISABLED - only Mini App initData auth will work');
 }
 
-// Create bot with conditional polling
+// Create bot - webhook mode doesn't poll, just exposes the processUpdate method
 const bot = new TelegramBot(BOT_TOKEN, { 
   polling: enablePolling ? {
     interval: 1000,
@@ -179,6 +191,53 @@ async function setChatMenuButton() {
 
 // Call setChatMenuButton after a small delay to ensure bot is ready
 setTimeout(setChatMenuButton, 2000);
+
+// Setup webhook in production
+async function setupWebhook() {
+  if (!useWebhook || !BASE_URL) {
+    logger.info('[Telegram Bot] Skipping webhook setup (not in webhook mode or no BASE_URL)');
+    return;
+  }
+  
+  const webhookUrl = `${BASE_URL}/api/telegram-webhook`;
+  
+  try {
+    // Delete any existing webhook first
+    await bot.deleteWebHook();
+    
+    // Set new webhook with allowed updates
+    const result = await bot.setWebHook(webhookUrl, {
+      allowed_updates: ['message', 'callback_query']
+    } as any);
+    
+    if (result) {
+      logger.info(`[Telegram Bot] Webhook set successfully: ${webhookUrl}`);
+    } else {
+      logger.error('[Telegram Bot] Failed to set webhook');
+    }
+    
+    // Get webhook info for verification
+    const info = await bot.getWebHookInfo();
+    logger.info({ webhookInfo: { url: info.url, pending: info.pending_update_count } }, '[Telegram Bot] Webhook info');
+    
+  } catch (error) {
+    logger.error({ error: error instanceof Error ? error.message : 'Unknown error' }, '[Telegram Bot] Error setting webhook');
+  }
+}
+
+// Process incoming webhook update
+function processWebhookUpdate(update: any): void {
+  try {
+    bot.processUpdate(update);
+  } catch (error) {
+    logger.error({ error }, '[Telegram Bot] Error processing webhook update');
+  }
+}
+
+// Call webhook setup in production after delay
+if (useWebhook) {
+  setTimeout(setupWebhook, 3000);
+}
 
 // Graceful shutdown
 process.once('SIGINT', () => {
@@ -282,4 +341,4 @@ bot.on('message', async (msg) => {
 
 
 
-export { bot };
+export { bot, processWebhookUpdate, BOT_TOKEN };

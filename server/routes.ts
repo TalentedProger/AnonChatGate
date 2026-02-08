@@ -251,6 +251,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     res.json({ ok: true, timestamp: new Date().toISOString() });
   });
 
+  // Telegram Bot Webhook endpoint (for production)
+  app.post('/api/telegram-webhook', async (req, res) => {
+    try {
+      // Dynamically import to avoid circular dependency and handle when bot is not initialized
+      const { processWebhookUpdate, BOT_TOKEN } = await import('./telegram-bot');
+      
+      if (!BOT_TOKEN) {
+        logger.warn('[Webhook] Bot token not configured, ignoring webhook');
+        return res.sendStatus(200);
+      }
+      
+      const update = req.body;
+      
+      if (!update || typeof update !== 'object') {
+        logger.warn('[Webhook] Invalid update received');
+        return res.sendStatus(400);
+      }
+      
+      // Process the update
+      processWebhookUpdate(update);
+      
+      // Always respond 200 to Telegram
+      res.sendStatus(200);
+    } catch (error) {
+      logger.error({ error }, '[Webhook] Error handling update');
+      // Still respond 200 to avoid Telegram retries
+      res.sendStatus(200);
+    }
+  });
+
   // Development-only auth endpoint for testing
   app.post('/api/auth/dev', async (req, res) => {
     // CRITICAL SECURITY: Multiple layers of production protection
