@@ -146,7 +146,7 @@ export default function ChatInterface({
   // Reply functionality state
   const [replyingTo, setReplyingTo] = useState<ChatMessage | null>(null);
   const [contextMenuMessage, setContextMenuMessage] = useState<ChatMessage | null>(null);
-  const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
+  const [contextMenuPosition, setContextMenuPosition] = useState<{ right: number; top: number; messageRect: DOMRect | null }>({ right: 0, top: 0, messageRect: null });
   const [highlightedMessageId, setHighlightedMessageId] = useState<number | null>(null);
   
   // Touch/swipe state for reply with animation
@@ -212,10 +212,19 @@ export default function ChatInterface({
       const messageBubble = target.closest('[data-message-bubble]');
       if (messageBubble) {
         const rect = messageBubble.getBoundingClientRect();
-        setContextMenuPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+        // Position: right edge aligned with message, directly below message
+        setContextMenuPosition({ 
+          right: window.innerWidth - rect.right,
+          top: rect.bottom + 4,
+          messageRect: rect
+        });
       } else {
         const rect = target.getBoundingClientRect();
-        setContextMenuPosition({ x: rect.left + rect.width / 2, y: rect.bottom + 8 });
+        setContextMenuPosition({ 
+          right: window.innerWidth - rect.right,
+          top: rect.bottom + 4,
+          messageRect: rect
+        });
       }
       setContextMenuMessage(message);
       swipingMessageId.current = null;
@@ -651,23 +660,44 @@ export default function ChatInterface({
         <div ref={messagesEndRef} />
         </div>
         
-        {/* Context Menu Overlay - no blur, semi-transparent */}
-        {contextMenuMessage && (
-          <div 
-            className="fixed inset-0 z-40 bg-black/50 animate-in fade-in duration-200"
-            onClick={() => setContextMenuMessage(null)}
-          />
+        {/* Context Menu Overlay - blur everything except the held message */}
+        {contextMenuMessage && contextMenuPosition.messageRect && (
+          <>
+            {/* Blur overlay with cutout for the message */}
+            <div 
+              className="fixed inset-0 z-40 animate-in fade-in duration-200"
+              onClick={() => setContextMenuMessage(null)}
+              style={{
+                background: 'rgba(0, 0, 0, 0.6)',
+                backdropFilter: 'blur(4px)',
+                WebkitBackdropFilter: 'blur(4px)',
+                // Create a clip path that excludes the message area
+                clipPath: `polygon(
+                  0% 0%, 
+                  0% 100%, 
+                  ${contextMenuPosition.messageRect.left}px 100%,
+                  ${contextMenuPosition.messageRect.left}px ${contextMenuPosition.messageRect.top}px,
+                  ${contextMenuPosition.messageRect.right}px ${contextMenuPosition.messageRect.top}px,
+                  ${contextMenuPosition.messageRect.right}px ${contextMenuPosition.messageRect.bottom}px,
+                  ${contextMenuPosition.messageRect.left}px ${contextMenuPosition.messageRect.bottom}px,
+                  ${contextMenuPosition.messageRect.left}px 100%,
+                  100% 100%, 
+                  100% 0%
+                )`
+              }}
+            />
+          </>
         )}
         
-        {/* Context Menu for Long Press - positioned at right edge of message, above it */}
+        {/* Context Menu for Long Press - positioned at right edge of message, below it */}
         {contextMenuMessage && (
           <div 
             className="fixed z-50 bg-zinc-800 border border-zinc-700 rounded-xl shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 min-w-[160px]"
             style={{ 
               // Right edge of menu aligned with right edge of message
-              right: Math.max(window.innerWidth - contextMenuPosition.x, 16),
-              // Position above message with small gap, ensure it doesn't go off screen
-              top: Math.max(contextMenuPosition.y - 100, 16)
+              right: Math.max(contextMenuPosition.right, 16),
+              // Position directly below message
+              top: Math.min(contextMenuPosition.top, window.innerHeight - 120)
             }}
             onClick={(e) => e.stopPropagation()}
           >

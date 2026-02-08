@@ -763,6 +763,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             id: msg.id,
             content: msg.content,
             createdAt: msg.createdAt,
+            replyToId: msg.replyToId,
+            replyToAnonName: msg.replyToAnonName,
+            replyToContent: msg.replyToContent,
             user: msg.user ? {
               id: msg.user.id,
               anonName: msg.user.anonName
@@ -783,6 +786,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
             id: msg.id,
             content: msg.content,
             createdAt: msg.createdAt,
+            replyToId: msg.replyToId,
+            replyToAnonName: msg.replyToAnonName,
+            replyToContent: msg.replyToContent,
             user: msg.user ? {
               id: msg.user.id,
               anonName: msg.user.anonName
