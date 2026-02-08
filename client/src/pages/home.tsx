@@ -442,14 +442,14 @@ export default function HomePage() {
               ) : news.length === 0 ? (
                 <div className="text-center text-gray-400 py-8">Новостей пока нет</div>
               ) : (
-              <div className="relative flex items-center justify-center gap-2">
+              <div className="relative flex items-center justify-between w-full">
                 {news.length > 1 && (
                   <button
                     onClick={prevNews}
-                    className="flex-shrink-0 hover:scale-110 transition-transform p-1"
+                    className="flex-shrink-0 hover:scale-110 transition-transform p-2 -ml-2"
                     aria-label="Предыдущая новость"
                   >
-                    <ChevronLeft className="w-6 h-6 text-white/70" />
+                    <ChevronLeft className="w-7 h-7 text-white/70 hover:text-white" />
                   </button>
                 )}
                 
@@ -480,10 +480,10 @@ export default function HomePage() {
                 {news.length > 1 && (
                   <button
                     onClick={nextNews}
-                    className="flex-shrink-0 hover:scale-110 transition-transform p-1"
+                    className="flex-shrink-0 hover:scale-110 transition-transform p-2 -mr-2"
                     aria-label="Следующая новость"
                   >
-                    <ChevronRight className="w-6 h-6 text-white/70" />
+                    <ChevronRight className="w-7 h-7 text-white/70 hover:text-white" />
                   </button>
                 )}
               </div>

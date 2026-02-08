@@ -458,7 +458,7 @@ export function useAuth() {
 
   return {
     ...authState,
-    refreshToken: () => authManager.refreshToken(),
+    doRefreshToken: () => authManager.refreshToken(),
     getValidToken: () => authManager.getValidToken(),
     getCurrentToken: () => authManager.getCurrentToken(),
     handleAuthError: () => authManager.handleAuthError(),

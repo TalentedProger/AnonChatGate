@@ -67,9 +67,14 @@ try {
 // Determine if polling should be enabled
 // In production, ALWAYS disable polling to avoid 409 conflicts
 // Polling is NOT needed for Telegram Mini Apps - they use initData authentication
-// Use ENABLE_BOT_POLLING=true to explicitly enable it ONLY if you have a single instance
+// Use ENABLE_BOT_POLLING=false to explicitly disable it in development
 const isProduction = process.env.NODE_ENV === 'production';
-const enablePolling = process.env.ENABLE_BOT_POLLING === 'true' && !isProduction;
+
+// In development, enable polling by default (unless explicitly disabled)
+// In production, NEVER enable polling - it causes 409 conflicts on multi-instance deployments
+const enablePolling = isProduction 
+  ? false 
+  : process.env.ENABLE_BOT_POLLING !== 'false';
 
 // In production, NEVER enable polling - it causes 409 conflicts on multi-instance deployments
 if (isProduction && process.env.ENABLE_BOT_POLLING === 'true') {
@@ -77,12 +82,12 @@ if (isProduction && process.env.ENABLE_BOT_POLLING === 'true') {
   logger.warn('[Telegram Bot] Telegram Mini Apps work without polling - authentication uses initData');
 }
 
-logger.info(`[Telegram Bot] Environment: NODE_ENV=${process.env.NODE_ENV}, isProduction=${isProduction}, ENABLE_BOT_POLLING=${process.env.ENABLE_BOT_POLLING}`);
+logger.info(`[Telegram Bot] Environment: NODE_ENV=${process.env.NODE_ENV}, isProduction=${isProduction}, enablePolling=${enablePolling}`);
 
 if (!enablePolling) {
   logger.info('[Telegram Bot] Polling DISABLED - Mini App authentication will still work via initData');
 } else {
-  logger.info('[Telegram Bot] Polling ENABLED (development mode) - make sure only ONE instance has this enabled!');
+  logger.info('[Telegram Bot] Polling ENABLED - bot will respond to messages');
 }
 
 // Create bot with conditional polling
@@ -140,7 +145,7 @@ bot.on('polling_error', (error: any) => {
         bot.stopPolling();
         logger.info('[Telegram Bot] Polling stopped. App will continue working without bot polling features.');
       } catch (stopError) {
-        logger.error('[Telegram Bot] Failed to stop polling:', stopError);
+        logger.error({ error: stopError }, '[Telegram Bot] Failed to stop polling');
       }
     }
   }
@@ -168,7 +173,7 @@ async function setChatMenuButton() {
     logger.info('[Telegram Bot] Chat menu button set successfully');
   } catch (error) {
     // This may fail if api.telegram.org is not accessible
-    logger.warn('[Telegram Bot] Could not set chat menu button:', error instanceof Error ? error.message : 'Unknown error');
+    logger.warn({ error: error instanceof Error ? error.message : 'Unknown error' }, '[Telegram Bot] Could not set chat menu button');
   }
 }
 

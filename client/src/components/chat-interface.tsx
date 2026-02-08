@@ -1,9 +1,70 @@
-import { useState, useEffect, useRef, memo, useCallback } from 'react';
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react';
 import { Send, ChevronLeft, Check, CheckCheck, Menu, Reply, X } from 'lucide-react';
 import { useLocation } from 'wouter';
 import chatBackgroundGalaxy from '@/assets/chat_background_galaxy.jpg';
 import mainGroupInternal from '@/assets/main_group_internal.jpg';
 import type { ChatUser, ChatMessage } from '@/types';
+
+// Parse reply from message content - checks if message starts with reply format
+function parseReplyFromContent(content: string): { replyTo: { anonName: string; content: string } | null; actualContent: string } {
+  // Check for reply prefix format: ↩️ @username: "quoted text"\n\n
+  const replyRegex = /^↩️\s*@([^:]+):\s*[""]([^""]+)[""]\s*\n\n/;
+  const match = content.match(replyRegex);
+  
+  if (match) {
+    return {
+      replyTo: {
+        anonName: match[1].trim(),
+        content: match[2].trim()
+      },
+      actualContent: content.replace(replyRegex, '').trim()
+    };
+  }
+  
+  // Also check for &quot; escaped format
+  const escapedReplyRegex = /^↩️\s*@([^:]+):\s*&quot;([^&]+)&quot;\s*\n\n/;
+  const escapedMatch = content.match(escapedReplyRegex);
+  
+  if (escapedMatch) {
+    return {
+      replyTo: {
+        anonName: escapedMatch[1].trim(),
+        content: escapedMatch[2].trim()
+      },
+      actualContent: content.replace(escapedReplyRegex, '').trim()
+    };
+  }
+  
+  return { replyTo: null, actualContent: content };
+}
+
+// Format date for date separator
+function formatDateSeparator(dateString: string): string {
+  const date = new Date(dateString);
+  const today = new Date();
+  const yesterday = new Date(today);
+  yesterday.setDate(yesterday.getDate() - 1);
+  
+  const dateOnly = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const todayOnly = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const yesterdayOnly = new Date(yesterday.getFullYear(), yesterday.getMonth(), yesterday.getDate());
+  
+  if (dateOnly.getTime() === todayOnly.getTime()) {
+    return 'Сегодня';
+  } else if (dateOnly.getTime() === yesterdayOnly.getTime()) {
+    return 'Вчера';
+  } else {
+    const months = ['января', 'февраля', 'марта', 'апреля', 'мая', 'июня', 
+                    'июля', 'августа', 'сентября', 'октября', 'ноября', 'декабря'];
+    return `${date.getDate()} ${months[date.getMonth()]}`;
+  }
+}
+
+// Get date key for grouping messages
+function getDateKey(dateString: string): string {
+  const date = new Date(dateString);
+  return `${date.getFullYear()}-${date.getMonth()}-${date.getDate()}`;
+}
 
 interface ChatInterfaceProps {
   user: ChatUser;
@@ -72,11 +133,12 @@ export default function ChatInterface({
   const [contextMenuMessage, setContextMenuMessage] = useState<ChatMessage | null>(null);
   const [contextMenuPosition, setContextMenuPosition] = useState({ x: 0, y: 0 });
   
-  // Touch/swipe state for reply
+  // Touch/swipe state for reply with animation
   const touchStartX = useRef<number>(0);
   const touchCurrentX = useRef<number>(0);
   const swipingMessageId = useRef<number | null>(null);
   const longPressTimer = useRef<NodeJS.Timeout | null>(null);
+  const [swipeOffset, setSwipeOffset] = useState<{ [key: number]: number }>({});
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -86,6 +148,10 @@ export default function ChatInterface({
   const handleReply = useCallback((message: ChatMessage) => {
     setReplyingTo(message);
     setContextMenuMessage(null);
+    // Vibrate on reply trigger (like Telegram)
+    if (navigator.vibrate) {
+      navigator.vibrate(10);
+    }
     textareaRef.current?.focus();
   }, []);
   
@@ -94,7 +160,7 @@ export default function ChatInterface({
     setReplyingTo(null);
   }, []);
   
-  // Touch handlers for swipe-to-reply
+  // Touch handlers for swipe-to-reply with animation
   const handleTouchStart = useCallback((e: React.TouchEvent, message: ChatMessage) => {
     touchStartX.current = e.touches[0].clientX;
     touchCurrentX.current = e.touches[0].clientX;
@@ -106,10 +172,11 @@ export default function ChatInterface({
       setContextMenuPosition({ x: rect.left + rect.width / 2, y: rect.top });
       setContextMenuMessage(message);
       swipingMessageId.current = null;
+      setSwipeOffset(prev => ({ ...prev, [message.id]: 0 }));
     }, 500);
   }, []);
   
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+  const handleTouchMove = useCallback((e: React.TouchEvent, message: ChatMessage) => {
     // Cancel long press if moving
     if (longPressTimer.current) {
       clearTimeout(longPressTimer.current);
@@ -117,6 +184,14 @@ export default function ChatInterface({
     }
     
     touchCurrentX.current = e.touches[0].clientX;
+    
+    // Calculate swipe offset for animation (only allow left swipe)
+    if (swipingMessageId.current === message.id) {
+      const deltaX = touchStartX.current - touchCurrentX.current;
+      // Limit swipe to 80px max, only positive (left) direction
+      const offset = Math.min(Math.max(deltaX, 0), 80);
+      setSwipeOffset(prev => ({ ...prev, [message.id]: offset }));
+    }
   }, []);
   
   const handleTouchEnd = useCallback((message: ChatMessage) => {
@@ -132,6 +207,9 @@ export default function ChatInterface({
     if (deltaX > 50 && swipingMessageId.current === message.id) {
       handleReply(message);
     }
+    
+    // Reset swipe animation
+    setSwipeOffset(prev => ({ ...prev, [message.id]: 0 }));
     
     swipingMessageId.current = null;
     touchStartX.current = 0;
@@ -350,82 +428,135 @@ export default function ChatInterface({
             </p>
           </div>
         ) : (
-          messages.map((message) => {
+          messages.map((message, index) => {
             const isCurrentUser = message.user?.id === user.id;
+            const currentOffset = swipeOffset[message.id] || 0;
+            
+            // Parse reply from message content
+            const { replyTo, actualContent } = parseReplyFromContent(message.content);
+            
+            // Check if we need to show date separator
+            const currentDateKey = getDateKey(message.createdAt);
+            const previousMessage = index > 0 ? messages[index - 1] : null;
+            const previousDateKey = previousMessage ? getDateKey(previousMessage.createdAt) : null;
+            const showDateSeparator = currentDateKey !== previousDateKey;
             
             return (
-              <div 
-                key={`${message.id}-${message.createdAt}`}
-                className="flex items-start space-x-3 group"
-                data-testid={`message-${message.id}`}
-                onTouchStart={(e) => handleTouchStart(e, message)}
-                onTouchMove={handleTouchMove}
-                onTouchEnd={() => handleTouchEnd(message)}
-              >
-                {/* Clickable Avatar */}
-                <button
-                  onClick={() => message.user && !isCurrentUser && handleUserClick(message.user.id)}
-                  disabled={isCurrentUser || !message.user}
-                  className={`w-8 h-8 ${
-                    getAvatarColor(message.user?.id || 0)
-                  } rounded-full flex items-center justify-center flex-shrink-0 ${
-                    !isCurrentUser && message.user ? 'cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all' : ''
-                  }`}
-                >
-                  <span className="text-white text-xs font-semibold">
-                    {message.user ? getInitials(message.user.anonName) : '?'}
-                  </span>
-                </button>
+              <div key={`${message.id}-${message.createdAt}`}>
+                {/* Date Separator */}
+                {showDateSeparator && (
+                  <div className="flex justify-center my-4">
+                    <div className="bg-zinc-800/90 backdrop-blur-sm text-zinc-300 text-xs font-medium px-3 py-1.5 rounded-full shadow-lg">
+                      {formatDateSeparator(message.createdAt)}
+                    </div>
+                  </div>
+                )}
                 
-                <div className="flex-1 min-w-0 max-w-[70%]">
-                  <div className="flex items-baseline space-x-2 mb-2">
-                    {/* Clickable Username */}
+                <div 
+                  className="flex items-start space-x-3 group relative overflow-hidden"
+                  data-testid={`message-${message.id}`}
+                  onTouchStart={(e) => handleTouchStart(e, message)}
+                  onTouchMove={(e) => handleTouchMove(e, message)}
+                  onTouchEnd={() => handleTouchEnd(message)}
+                >
+                  {/* Reply indicator that appears during swipe */}
+                  <div 
+                    className="absolute left-0 top-1/2 -translate-y-1/2 flex items-center justify-center transition-opacity duration-150"
+                    style={{ 
+                      opacity: currentOffset > 20 ? Math.min((currentOffset - 20) / 30, 1) : 0,
+                      transform: `translateX(${Math.max(0, currentOffset - 60)}px)`
+                    }}
+                  >
+                    <div className="w-8 h-8 rounded-full bg-violet-500/80 flex items-center justify-center">
+                      <Reply className="w-4 h-4 text-white" />
+                    </div>
+                  </div>
+                  
+                  {/* Message container with swipe animation */}
+                  <div 
+                    className="flex items-start space-x-3 w-full transition-transform"
+                    style={{ 
+                      transform: `translateX(-${currentOffset}px)`,
+                      transition: currentOffset === 0 ? 'transform 0.2s ease-out' : 'none'
+                    }}
+                  >
+                    {/* Clickable Avatar */}
                     <button
                       onClick={() => message.user && !isCurrentUser && handleUserClick(message.user.id)}
                       disabled={isCurrentUser || !message.user}
-                      className={`text-sm font-medium text-white drop-shadow-lg ${
-                        !isCurrentUser && message.user ? 'cursor-pointer hover:text-purple-400 transition-colors' : ''
+                      className={`w-8 h-8 ${
+                        getAvatarColor(message.user?.id || 0)
+                      } rounded-full flex items-center justify-center flex-shrink-0 ${
+                        !isCurrentUser && message.user ? 'cursor-pointer hover:ring-2 hover:ring-purple-500 transition-all' : ''
                       }`}
                     >
-                      {isCurrentUser ? 'Вы' : (message.user?.anonName || 'Неизвестный')}
+                      <span className="text-white text-xs font-semibold">
+                        {message.user ? getInitials(message.user.anonName) : '?'}
+                      </span>
                     </button>
-                    <span className="text-xs text-zinc-400 drop-shadow-md">
-                      {formatTime(message.createdAt)}
-                    </span>
-                    {/* Read receipts - show only for current user's messages, next to time */}
-                    {isCurrentUser && (
-                      <>
-                        {message.readBy && message.readBy.length > 0 ? (
-                          <div className="flex items-center text-blue-400">
-                            <CheckCheck className="w-3 h-3" />
-                          </div>
-                        ) : message.deliveredTo && message.deliveredTo.length > 0 ? (
-                          <div className="flex items-center text-zinc-400">
-                            <CheckCheck className="w-3 h-3" />
-                          </div>
-                        ) : (
-                          <div className="flex items-center text-zinc-500">
-                            <Check className="w-3 h-3" />
+                    
+                    <div className="flex-1 min-w-0 max-w-[70%]">
+                      <div className="flex items-baseline space-x-2 mb-2">
+                        {/* Clickable Username */}
+                        <button
+                          onClick={() => message.user && !isCurrentUser && handleUserClick(message.user.id)}
+                          disabled={isCurrentUser || !message.user}
+                          className={`text-sm font-medium text-white drop-shadow-lg ${
+                            !isCurrentUser && message.user ? 'cursor-pointer hover:text-purple-400 transition-colors' : ''
+                          }`}
+                        >
+                          {isCurrentUser ? 'Вы' : (message.user?.anonName || 'Неизвестный')}
+                        </button>
+                        <span className="text-xs text-zinc-400 drop-shadow-md">
+                          {formatTime(message.createdAt)}
+                        </span>
+                        {/* Read receipts - show only for current user's messages, next to time */}
+                        {isCurrentUser && (
+                          <>
+                            {message.readBy && message.readBy.length > 0 ? (
+                              <div className="flex items-center text-blue-400">
+                                <CheckCheck className="w-3 h-3" />
+                              </div>
+                            ) : message.deliveredTo && message.deliveredTo.length > 0 ? (
+                              <div className="flex items-center text-zinc-400">
+                                <CheckCheck className="w-3 h-3" />
+                              </div>
+                            ) : (
+                              <div className="flex items-center text-zinc-500">
+                                <Check className="w-3 h-3" />
+                              </div>
+                            )}
+                          </>
+                        )}
+                        {/* Reply button - appears on hover (desktop) */}
+                        <button
+                          onClick={() => handleReply(message)}
+                          className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-zinc-700 rounded"
+                          title="Ответить"
+                        >
+                          <Reply className="w-3 h-3 text-zinc-400" />
+                        </button>
+                      </div>
+                      
+                      <div className={`rounded-lg px-3 py-2 mb-3 ${
+                        isCurrentUser 
+                          ? 'bg-blue-600/95 text-white rounded-tl-sm backdrop-blur-sm' 
+                          : 'bg-zinc-800/95 border border-zinc-700 rounded-tl-sm text-white backdrop-blur-sm'
+                      }`}>
+                        {/* Reply Preview - shown inside message if this is a reply */}
+                        {replyTo && (
+                          <div className={`mb-2 pl-2 border-l-2 ${isCurrentUser ? 'border-blue-300' : 'border-violet-500'}`}>
+                            <p className={`text-xs font-medium ${isCurrentUser ? 'text-blue-200' : 'text-violet-400'}`}>
+                              {replyTo.anonName}
+                            </p>
+                            <p className={`text-xs ${isCurrentUser ? 'text-blue-100/70' : 'text-zinc-400'} line-clamp-1`}>
+                              {replyTo.content}
+                            </p>
                           </div>
                         )}
-                      </>
-                    )}
-                    {/* Reply button - appears on hover (desktop) */}
-                    <button
-                      onClick={() => handleReply(message)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity p-1 hover:bg-zinc-700 rounded"
-                      title="Ответить"
-                    >
-                      <Reply className="w-3 h-3 text-zinc-400" />
-                    </button>
-                  </div>
-                  
-                  <div className={`rounded-lg px-3 py-2 mb-3 ${
-                    isCurrentUser 
-                      ? 'bg-blue-600/95 text-white rounded-tl-sm backdrop-blur-sm' 
-                      : 'bg-zinc-800/95 border border-zinc-700 rounded-tl-sm text-white backdrop-blur-sm'
-                  }`}>
-                    <p className="text-sm whitespace-pre-wrap break-words">{message.content}</p>
+                        <p className="text-sm whitespace-pre-wrap break-words">{actualContent}</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
