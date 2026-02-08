@@ -159,6 +159,7 @@ export default function ChatInterface({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
   
   // Scroll to a specific message when clicking on reply container
   const scrollToMessage = useCallback((messageId: number) => {
@@ -205,18 +206,21 @@ export default function ChatInterface({
     touchCurrentX.current = e.touches[0].clientX;
     swipingMessageId.current = message.id;
     
-    // Long press timer for context menu - get message element position
+    // Long press timer for context menu - get FULL message container position
     longPressTimer.current = setTimeout(() => {
-      // Find the message bubble element
+      // Find the full message container (avatar + name + time + message)
       const target = e.target as HTMLElement;
-      const messageBubble = target.closest('[data-message-bubble]');
-      if (messageBubble) {
-        const rect = messageBubble.getBoundingClientRect();
-        // Position: right edge aligned with message, directly below message
+      const messageContainer = target.closest('[data-message-container]');
+      if (messageContainer) {
+        const rect = messageContainer.getBoundingClientRect();
+        // Find the message bubble for positioning the context menu
+        const messageBubble = messageContainer.querySelector('[data-message-bubble]');
+        const bubbleRect = messageBubble ? messageBubble.getBoundingClientRect() : rect;
+        // Position: right edge aligned with bubble, directly below bubble
         setContextMenuPosition({ 
-          right: window.innerWidth - rect.right,
-          top: rect.bottom + 4,
-          messageRect: rect
+          right: window.innerWidth - bubbleRect.right,
+          top: bubbleRect.bottom + 4,
+          messageRect: rect // Use full container rect for blur cutout
         });
       } else {
         const rect = target.getBoundingClientRect();
@@ -446,8 +450,10 @@ export default function ChatInterface({
 
       {/* Messages */}
       <div 
+        ref={scrollContainerRef}
         className="flex-1 overflow-y-auto px-4 py-4 space-y-6 scroll-smooth relative"
         style={{
+          overflow: contextMenuMessage ? 'hidden' : 'auto',
           background: useBackgroundImage 
             ? `linear-gradient(rgba(0, 0, 0, 0.4), rgba(0, 0, 0, 0.4)), url(${chatBackgroundGalaxy}) center/cover fixed` 
             : '#000'
@@ -535,6 +541,7 @@ export default function ChatInterface({
                 <div 
                   className="flex items-start space-x-3 group relative overflow-hidden"
                   data-testid={`message-${message.id}`}
+                  data-message-container
                   onTouchStart={(e) => handleTouchStart(e, message)}
                   onTouchMove={(e) => handleTouchMove(e, message)}
                   onTouchEnd={() => handleTouchEnd(message)}
