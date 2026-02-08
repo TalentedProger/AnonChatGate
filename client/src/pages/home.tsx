@@ -605,16 +605,16 @@ function FeatureCard({ icon, title, description, glowColor }: {
   glowColor: 'cyan' | 'violet' | 'green' | 'pink' | 'indigo';
 }) {
   const glowColors = {
-    cyan: 'border-cyan-500/30 shadow-[0_0_15px_#00ffff20] hover:shadow-[0_0_25px_#00ffff40]',
-    violet: 'border-violet-500/30 shadow-[0_0_15px_#8b5cf640] hover:shadow-[0_0_25px_#8b5cf660]',
-    green: 'border-green-500/30 shadow-[0_0_15px_#00ff0020] hover:shadow-[0_0_25px_#00ff0040]',
-    pink: 'border-pink-500/30 shadow-[0_0_15px_#ff69b420] hover:shadow-[0_0_25px_#ff69b440]',
-    indigo: 'border-indigo-500/30 shadow-[0_0_15px_#4f46e520] hover:shadow-[0_0_25px_#4f46e540]'
+    cyan: 'border-cyan-500/30 shadow-[0_0_15px_#00ffff20]',
+    violet: 'border-violet-500/30 shadow-[0_0_15px_#8b5cf640]',
+    green: 'border-green-500/30 shadow-[0_0_15px_#00ff0020]',
+    pink: 'border-pink-500/30 shadow-[0_0_15px_#ff69b420]',
+    indigo: 'border-indigo-500/30 shadow-[0_0_15px_#4f46e520]'
   };
 
   return (
     <div
-      className={`bg-zinc-800/90 rounded-2xl p-6 border-2 ${glowColors[glowColor as keyof typeof glowColors]} transition-all duration-300 cursor-pointer hover:scale-[1.02] h-full`}
+      className={`bg-zinc-800/90 rounded-2xl p-6 border-2 ${glowColors[glowColor as keyof typeof glowColors]} h-full`}
     >
       <div className="flex items-start space-x-4">
         <div className="mt-1">{icon}</div>

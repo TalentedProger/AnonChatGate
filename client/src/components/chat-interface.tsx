@@ -208,19 +208,20 @@ export default function ChatInterface({
     
     // Long press timer for context menu - get FULL message container position
     longPressTimer.current = setTimeout(() => {
-      // Find the full message container (avatar + name + time + message)
+      // Find the message container (avatar + name + time + message bubble row only)
       const target = e.target as HTMLElement;
+      // Use data-message-container which is the inner row (excludes date separator)
       const messageContainer = target.closest('[data-message-container]');
       if (messageContainer) {
-        const rect = messageContainer.getBoundingClientRect();
+        const containerRect = messageContainer.getBoundingClientRect();
         // Find the message bubble for positioning the context menu
         const messageBubble = messageContainer.querySelector('[data-message-bubble]');
-        const bubbleRect = messageBubble ? messageBubble.getBoundingClientRect() : rect;
+        const bubbleRect = messageBubble ? messageBubble.getBoundingClientRect() : containerRect;
         // Position: right edge aligned with bubble, directly below bubble
         setContextMenuPosition({ 
           right: window.innerWidth - bubbleRect.right,
           top: bubbleRect.bottom + 4,
-          messageRect: rect // Use full container rect for blur cutout
+          messageRect: containerRect // Use message container rect (avatar + name + time + bubble)
         });
       } else {
         const rect = target.getBoundingClientRect();
@@ -527,7 +528,6 @@ export default function ChatInterface({
               <div 
                 key={`${message.id}-${message.createdAt}`} 
                 data-message-id={message.id}
-                className={`transition-all duration-500 rounded-lg ${isHighlighted ? 'bg-violet-500/20' : ''}`}
               >
                 {/* Date Separator */}
                 {showDateSeparator && (
@@ -539,7 +539,7 @@ export default function ChatInterface({
                 )}
                 
                 <div 
-                  className="flex items-start space-x-3 group relative overflow-hidden"
+                  className={`flex items-start space-x-3 group relative overflow-hidden transition-all duration-500 rounded-lg ${isHighlighted ? 'bg-violet-500/20' : ''}`}
                   data-testid={`message-${message.id}`}
                   data-message-container
                   onTouchStart={(e) => handleTouchStart(e, message)}
@@ -668,33 +668,43 @@ export default function ChatInterface({
         </div>
         
         {/* Context Menu Overlay - blur everything except the held message */}
-        {contextMenuMessage && contextMenuPosition.messageRect && (
-          <>
-            {/* Blur overlay with cutout for the message */}
-            <div 
-              className="fixed inset-0 z-40 animate-in fade-in duration-200"
-              onClick={() => setContextMenuMessage(null)}
-              style={{
-                background: 'rgba(0, 0, 0, 0.6)',
-                backdropFilter: 'blur(4px)',
-                WebkitBackdropFilter: 'blur(4px)',
-                // Create a clip path that excludes the message area
-                clipPath: `polygon(
-                  0% 0%, 
-                  0% 100%, 
-                  ${contextMenuPosition.messageRect.left}px 100%,
-                  ${contextMenuPosition.messageRect.left}px ${contextMenuPosition.messageRect.top}px,
-                  ${contextMenuPosition.messageRect.right}px ${contextMenuPosition.messageRect.top}px,
-                  ${contextMenuPosition.messageRect.right}px ${contextMenuPosition.messageRect.bottom}px,
-                  ${contextMenuPosition.messageRect.left}px ${contextMenuPosition.messageRect.bottom}px,
-                  ${contextMenuPosition.messageRect.left}px 100%,
-                  100% 100%, 
-                  100% 0%
-                )`
-              }}
-            />
-          </>
-        )}
+        {contextMenuMessage && contextMenuPosition.messageRect && (() => {
+          // Add padding to cutout to match visual highlight area
+          const padding = 4;
+          const rect = contextMenuPosition.messageRect;
+          const left = Math.max(0, rect.left - padding);
+          const top = Math.max(0, rect.top - padding);
+          const right = Math.min(window.innerWidth, rect.right + padding);
+          const bottom = rect.bottom + padding;
+          
+          return (
+            <>
+              {/* Blur overlay with cutout for the message */}
+              <div 
+                className="fixed inset-0 z-40 animate-in fade-in duration-200"
+                onClick={() => setContextMenuMessage(null)}
+                style={{
+                  background: 'rgba(0, 0, 0, 0.6)',
+                  backdropFilter: 'blur(4px)',
+                  WebkitBackdropFilter: 'blur(4px)',
+                  // Create a clip path that excludes the message area with padding
+                  clipPath: `polygon(
+                    0% 0%, 
+                    0% 100%, 
+                    ${left}px 100%,
+                    ${left}px ${top}px,
+                    ${right}px ${top}px,
+                    ${right}px ${bottom}px,
+                    ${left}px ${bottom}px,
+                    ${left}px 100%,
+                    100% 100%, 
+                    100% 0%
+                  )`
+                }}
+              />
+            </>
+          );
+        })()}
         
         {/* Context Menu for Long Press - positioned at right edge of message, below it */}
         {contextMenuMessage && (
