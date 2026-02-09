@@ -528,6 +528,7 @@ export default function ChatInterface({
               <div 
                 key={`${message.id}-${message.createdAt}`} 
                 data-message-id={message.id}
+                className={`transition-all duration-500 rounded-lg ${isHighlighted ? 'bg-violet-500/20' : ''}`}
               >
                 {/* Date Separator */}
                 {showDateSeparator && (
@@ -539,7 +540,7 @@ export default function ChatInterface({
                 )}
                 
                 <div 
-                  className={`flex items-start space-x-3 group relative overflow-hidden transition-all duration-500 rounded-lg ${isHighlighted ? 'bg-violet-500/20' : ''}`}
+                  className="flex items-start space-x-3 group relative overflow-hidden"
                   data-testid={`message-${message.id}`}
                   data-message-container
                   onTouchStart={(e) => handleTouchStart(e, message)}
@@ -669,17 +670,23 @@ export default function ChatInterface({
         
         {/* Context Menu Overlay - blur everything except the held message */}
         {contextMenuMessage && contextMenuPosition.messageRect && (() => {
-          // Add padding to cutout to match visual highlight area
+          // Get rect with padding for the cutout
           const padding = 4;
           const rect = contextMenuPosition.messageRect;
           const left = Math.max(0, rect.left - padding);
           const top = Math.max(0, rect.top - padding);
-          const right = Math.min(window.innerWidth, rect.right + padding);
-          const bottom = rect.bottom + padding;
+          const width = rect.width + padding * 2;
+          const height = rect.height + padding * 2;
+          const borderRadius = 8; // matches rounded-lg
+          const screenW = window.innerWidth;
+          const screenH = window.innerHeight;
+          
+          // Create SVG mask with rounded rectangle cutout
+          const svgMask = `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='${screenW}' height='${screenH}'%3E%3Cdefs%3E%3Cmask id='m'%3E%3Crect width='100%25' height='100%25' fill='white'/%3E%3Crect x='${left}' y='${top}' width='${width}' height='${height}' rx='${borderRadius}' fill='black'/%3E%3C/mask%3E%3C/defs%3E%3Crect width='100%25' height='100%25' fill='white' mask='url(%23m)'/%3E%3C/svg%3E")`;
           
           return (
             <>
-              {/* Blur overlay with cutout for the message */}
+              {/* Blur overlay with rounded cutout for the message */}
               <div 
                 className="fixed inset-0 z-40 animate-in fade-in duration-200"
                 onClick={() => setContextMenuMessage(null)}
@@ -687,19 +694,21 @@ export default function ChatInterface({
                   background: 'rgba(0, 0, 0, 0.6)',
                   backdropFilter: 'blur(4px)',
                   WebkitBackdropFilter: 'blur(4px)',
-                  // Create a clip path that excludes the message area with padding
-                  clipPath: `polygon(
-                    0% 0%, 
-                    0% 100%, 
-                    ${left}px 100%,
-                    ${left}px ${top}px,
-                    ${right}px ${top}px,
-                    ${right}px ${bottom}px,
-                    ${left}px ${bottom}px,
-                    ${left}px 100%,
-                    100% 100%, 
-                    100% 0%
-                  )`
+                  // Use SVG mask for rounded rectangle cutout
+                  WebkitMaskImage: svgMask,
+                  maskImage: svgMask,
+                  WebkitMaskSize: 'cover',
+                  maskSize: 'cover',
+                }}
+              />
+              {/* Highlighted frame around the held message */}
+              <div
+                className="fixed z-40 pointer-events-none rounded-lg bg-violet-500/20 animate-in fade-in duration-200"
+                style={{
+                  left: left,
+                  top: top,
+                  width: width,
+                  height: height,
                 }}
               />
             </>
