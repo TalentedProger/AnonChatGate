@@ -16,7 +16,5 @@ services:
         sync: false
       - key: TELEGRAM_WEBHOOK_SECRET
         sync: false
-      - key: WEBAPP_URL
-        sync: false
       - key: JWT_SECRET
         sync: false

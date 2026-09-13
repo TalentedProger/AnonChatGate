@@ -263,7 +263,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Health check
   app.get('/api/health', (req, res) => {
-    res.json({ ok: true, timestamp: new Date().toISOString() });
+    res.json({
+      ok: true,
+      version: process.env.RENDER_GIT_COMMIT?.slice(0, 7) || 'local',
+      timestamp: new Date().toISOString(),
+    });
   });
 
   // Telegram Bot Webhook endpoint (for production)

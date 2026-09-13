@@ -23,6 +23,7 @@ import {
   clientIpRateLimitKey,
   refreshUserRateLimitKey,
 } from "./rate-limit-security";
+import { resolvePublicBaseUrl } from "./public-url";
 
 // ============================================================================
 // ENVIRONMENT VALIDATION
@@ -66,13 +67,24 @@ function validateEnvironment(): ValidationError[] {
       });
     }
 
-    // WEBAPP_URL should use HTTPS in production
-    const webappUrl = process.env.WEBAPP_URL;
-    if (webappUrl && !webappUrl.startsWith('https://')) {
+    // Render's managed URL takes precedence over any stale WEBAPP_URL value.
+    let publicUrl: string | undefined;
+    let publicUrlInvalid = false;
+    try {
+      publicUrl = resolvePublicBaseUrl();
+    } catch {
+      publicUrlInvalid = true;
       errors.push({
-        variable: 'WEBAPP_URL',
-        issue: 'WEBAPP_URL should use HTTPS in production',
-        severity: 'warning'
+        variable: 'PUBLIC_URL',
+        issue: 'Public application URL is invalid',
+        severity: 'error'
+      });
+    }
+    if (!publicUrlInvalid && (!publicUrl || !publicUrl.startsWith('https://'))) {
+      errors.push({
+        variable: 'PUBLIC_URL',
+        issue: 'A valid HTTPS public application URL is required in production',
+        severity: 'error'
       });
     }
 

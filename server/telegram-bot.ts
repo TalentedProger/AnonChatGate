@@ -2,6 +2,7 @@ import TelegramBot from 'node-telegram-bot-api';
 import { storage } from './storage';
 import { logger } from './logger';
 import crypto from 'crypto';
+import { addCacheVersion, resolvePublicBaseUrl } from './public-url';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || '';
 const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
@@ -16,60 +17,17 @@ const BOT_DISABLED_THRESHOLD = 10; // After 10 consecutive errors, reduce loggin
 // Environment detection
 const isProduction = process.env.NODE_ENV === 'production';
 
-// Properly construct webapp URL without double protocol
-function getWebAppUrl(): string {
-  // Get URL from environment - check Railway, Render, Replit and custom
-  let url = process.env.WEBAPP_URL || 
-            process.env.RAILWAY_PUBLIC_DOMAIN ||
-            process.env.RENDER_EXTERNAL_URL || 
-            process.env.REPLIT_DOMAINS?.split(',')[0];
-  
-  // In production, WEBAPP_URL is required
-  if (!url && isProduction) {
-    logger.error('[Telegram Bot] WEBAPP_URL is not set! Bot inline buttons will not work.');
-    logger.error('[Telegram Bot] Please set WEBAPP_URL environment variable.');
-    return 'https://example.com/webapp-url-not-configured';
-  }
-  
-  // Fallback for development only
-  if (!url) {
-    url = 'localhost:5000';
-  }
-  
-  // Remove any existing protocol to avoid double prefixing
-  url = url.replace(/^https?:\/\//, '');
-  
-  // Don't use localhost in production
-  if (isProduction && url.includes('localhost')) {
-    logger.error('[Telegram Bot] Cannot use localhost URL in production!');
-    return 'https://example.com/webapp-url-not-configured';
-  }
-  
-  // Add version parameter to prevent caching issues
-  const version = Date.now();
-  const separator = url.includes('?') ? '&' : '?';
-  
-  // Add https protocol (required for Telegram Mini Apps)
-  return `https://${url}${separator}v=${version}`;
+const resolvedBaseUrl = resolvePublicBaseUrl();
+if (!resolvedBaseUrl && isProduction) {
+  throw new Error('A public application URL is required in production');
 }
 
-// Get base URL without version parameter (for webhook)
-function getBaseUrl(): string {
-  let url = process.env.WEBAPP_URL || 
-            process.env.RAILWAY_PUBLIC_DOMAIN ||
-            process.env.RENDER_EXTERNAL_URL || 
-            process.env.REPLIT_DOMAINS?.split(',')[0];
-  
-  if (!url) return '';
-  
-  // Remove any existing protocol
-  url = url.replace(/^https?:\/\//, '');
-  
-  return `https://${url}`;
+const BASE_URL = resolvedBaseUrl || 'http://localhost:5000';
+if (isProduction && !BASE_URL.startsWith('https://')) {
+  throw new Error('The public application URL must use HTTPS in production');
 }
 
-const WEBAPP_URL = getWebAppUrl();
-const BASE_URL = getBaseUrl();
+const WEBAPP_URL = addCacheVersion(BASE_URL);
 
 if (!BOT_TOKEN) {
   logger.warn('[Telegram Bot] TELEGRAM_BOT_TOKEN is not set - bot will not start');

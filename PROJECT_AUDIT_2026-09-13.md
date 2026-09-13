@@ -409,6 +409,11 @@ Read-only проверка показала:
   - [x] На временной изолированной схеме проверить создание с нуля, повторный идемпотентный запуск, журнал, CHECK и single-global UNIQUE; временная схема удалена.
   - [x] Применить reconciliation к текущей БД и выполнить `db:verify`: 2 миграции, 0 pending, 9 таблиц, обязательные constraints/indexes присутствуют (14.09.2026).
 - [ ] Не использовать текущий `WEBAPP_URL`; поднять новый staging после ротации секретов.
+  - [x] Подтвердить стабильный Render origin `https://anonchatgate.onrender.com`: health `200`, Telegram webhook указывает на этот origin, pending updates — `0`.
+  - [x] На Render всегда предпочитать автоматически управляемый `RENDER_EXTERNAL_URL`, чтобы забытый tunnel URL в `WEBAPP_URL` не мог перебить webhook и Mini App buttons.
+  - [x] Обновить локальный `WEBAPP_URL`, убрать его обязательную настройку из Render Blueprint и добавить fail-closed production-валидацию HTTPS URL.
+  - [x] Добавить unit-тесты приоритета Render URL, fallback-платформ, нормализации URL и отклонения credentials.
+  - [ ] Опубликовать изменения и подтвердить commit version, health, webhook и default Telegram menu button на Render.
 
 **Критерий выхода:** старые credentials не работают; security integration tests зелёные; новая пустая БД поднимается одной командой; сообщения невозможно читать без валидной сессии.
 
