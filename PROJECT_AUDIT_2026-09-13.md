@@ -401,7 +401,13 @@ Read-only проверка показала:
   - [x] Unit-тестом подтвердить 100 независимых rate-limit keys для 100 пользователей с одним NAT IP, IPv6 subnet grouping и невозможность использовать access token как refresh identity.
   - [x] Runtime-smoke на production bundle: у 100 пользователей с одним Render IP независимый остаток `599`; два анонимных запроса делят одну корзину `599 → 598` (14.09.2026).
   - Ограничение пилота: используется in-memory store одного Node-процесса. До запуска нескольких инстансов подключить Redis/Render Key Value, иначе счётчики между процессами не синхронизируются.
-- [ ] Создать воспроизводимый baseline миграций и выровнять staging/production schema.
+- [x] Создать воспроизводимый baseline миграций и выровнять текущую schema.
+  - [x] Добавить полный clean-DB baseline и отдельную fail-closed reconciliation migration; старые `001–009` оставить только как исторические файлы.
+  - [x] Заменить hardcoded runner на упорядоченное применение `migrations/active`, журнал `_app_migrations`, SHA-256 checksum, транзакцию на файл и PostgreSQL advisory lock.
+  - [x] Убрать ad hoc `ALTER TABLE` из startup-кода; `npm start` сначала выполняет миграции и не запускает сервер при ошибке.
+  - [x] Проверить данные до ограничений: нет дублей ключей, case-insensitive display names, недопустимых enum-like значений; global room ровно одна.
+  - [x] На временной изолированной схеме проверить создание с нуля, повторный идемпотентный запуск, журнал, CHECK и single-global UNIQUE; временная схема удалена.
+  - [x] Применить reconciliation к текущей БД и выполнить `db:verify`: 2 миграции, 0 pending, 9 таблиц, обязательные constraints/indexes присутствуют (14.09.2026).
 - [ ] Не использовать текущий `WEBAPP_URL`; поднять новый staging после ротации секретов.
 
 **Критерий выхода:** старые credentials не работают; security integration tests зелёные; новая пустая БД поднимается одной командой; сообщения невозможно читать без валидной сессии.

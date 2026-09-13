@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, bigint, serial, integer, uuid, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, bigint, serial, integer, uuid, index, uniqueIndex, check, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -22,7 +22,13 @@ export const users = pgTable("users", {
   photos: text("photos").array(),
   profileCompleted: text("profile_completed", { enum: ["true", "false"] }).default("false"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex("ux_users_display_name_lower").on(sql`lower(${table.displayName})`).where(sql`${table.displayName} IS NOT NULL`),
+  check("users_status_check", sql`${table.status} IN ('pending', 'approved', 'rejected')`),
+  check("users_course_check", sql`${table.course} IS NULL OR ${table.course} IN ('1', '2', '3', '4', '5', '6')`),
+  check("users_gender_check", sql`${table.gender} IS NULL OR ${table.gender} IN ('male', 'female')`),
+  check("users_profile_completed_check", sql`${table.profileCompleted} IS NULL OR ${table.profileCompleted} IN ('true', 'false')`),
+]);
 
 export const authSessions = pgTable("auth_sessions", {
   id: uuid("id").primaryKey(),
@@ -36,6 +42,7 @@ export const authSessions = pgTable("auth_sessions", {
 }, (table) => [
   index("idx_auth_sessions_user_id").on(table.userId),
   index("idx_auth_sessions_expires_at").on(table.expiresAt),
+  index("idx_auth_sessions_active_user").on(table.userId).where(sql`${table.revokedAt} IS NULL`),
 ]);
 
 export const rooms = pgTable("rooms", {
@@ -43,7 +50,10 @@ export const rooms = pgTable("rooms", {
   name: text("name").notNull(),
   type: text("type").notNull().default("global"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_rooms_name").on(table.name),
+  uniqueIndex("ux_rooms_single_global").on(table.type).where(sql`${table.type} = 'global'`),
+]);
 
 export const messages = pgTable("messages", {
   id: serial("id").primaryKey(),
@@ -51,20 +61,30 @@ export const messages = pgTable("messages", {
   userId: integer("user_id").references(() => users.id),
   content: text("content").notNull(),
   // Reply fields - stored separately, not embedded in content
-  replyToId: integer("reply_to_id"),             // ID of the message being replied to
+  replyToId: integer("reply_to_id").references((): AnyPgColumn => messages.id, { onDelete: "set null" }),
   replyToAnonName: text("reply_to_anon_name"),   // Name of user who wrote the replied message
   replyToContent: text("reply_to_content"),      // Truncated content of replied message
   deliveredTo: integer("delivered_to").array(),  // Array of user IDs who received the message
   readBy: integer("read_by").array(),            // Array of user IDs who read the message
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_messages_room_created").on(table.roomId, table.createdAt),
+  index("idx_messages_user").on(table.userId),
+  index("idx_messages_reply_to_id").on(table.replyToId),
+  index("idx_messages_delivered_to").using("gin", table.deliveredTo),
+  index("idx_messages_read_by").using("gin", table.readBy),
+]);
 
 export const profileViews = pgTable("profile_views", {
   id: serial("id").primaryKey(),
   profileUserId: integer("profile_user_id").references(() => users.id).notNull(), // Whose profile was viewed
   viewerUserId: integer("viewer_user_id").references(() => users.id).notNull(),   // Who viewed the profile
   viewedAt: timestamp("viewed_at").defaultNow().notNull(),
-});
+}, (table) => [
+  uniqueIndex("ux_profile_views_users").on(table.profileUserId, table.viewerUserId),
+  index("idx_profile_views_profile_user").on(table.profileUserId),
+  index("idx_profile_views_viewer_user").on(table.viewerUserId),
+]);
 
 export const friendRequests = pgTable("friend_requests", {
   id: serial("id").primaryKey(),
@@ -74,7 +94,14 @@ export const friendRequests = pgTable("friend_requests", {
   monthKey: text("month_key").notNull(), // Format: "2025-01" - requests are sent at month end
   createdAt: timestamp("created_at").defaultNow().notNull(),
   respondedAt: timestamp("responded_at"),
-});
+}, (table) => [
+  uniqueIndex("ux_friend_requests_users_month").on(table.fromUserId, table.toUserId, table.monthKey),
+  index("idx_friend_requests_to_user_status").on(table.toUserId, table.status),
+  index("idx_friend_requests_month").on(table.monthKey),
+  index("idx_friend_requests_from_user").on(table.fromUserId),
+  check("friend_requests_status_check", sql`${table.status} IN ('pending', 'accepted', 'rejected')`),
+  check("friend_requests_month_key_check", sql`${table.monthKey} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+]);
 
 export const news = pgTable("news", {
   id: serial("id").primaryKey(),
@@ -83,7 +110,9 @@ export const news = pgTable("news", {
   imageUrl: text("image_url"),
   authorId: integer("author_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("idx_news_created_at").on(table.createdAt),
+]);
 
 // Favorites table - users can add 1 favorite per month
 export const favorites = pgTable("favorites", {
@@ -93,7 +122,12 @@ export const favorites = pgTable("favorites", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   // Track the month this was set for the 1/month limit
   monthKey: text("month_key").notNull(), // Format: "2025-01" - allows only 1 favorite per month
-});
+}, (table) => [
+  uniqueIndex("ux_favorites_user_month").on(table.userId, table.monthKey),
+  index("idx_favorites_user_id").on(table.userId),
+  index("idx_favorites_favorite_user_id").on(table.favoriteUserId),
+  check("favorites_month_key_check", sql`${table.monthKey} ~ '^[0-9]{4}-(0[1-9]|1[0-2])$'`),
+]);
 
 export const usersRelations = relations(users, ({ many }) => ({
   messages: many(messages),

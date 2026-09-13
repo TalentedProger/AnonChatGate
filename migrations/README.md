@@ -1,94 +1,50 @@
-# Database Migrations
+# Database migrations
 
-This directory contains SQL migration files for the AnonChatGate database.
+The supported migration chain lives in `migrations/active/` and is the only
+directory read by `apply-migrations.js`.
 
-## Applying Migrations
+- `000_baseline.sql` creates the complete schema in an empty database.
+- `001_reconcile_existing.sql` upgrades the legacy production schema and adds
+  the missing checks, foreign key, and unique indexes.
+- SQL files `001_add_indexes.sql` through `009_add_auth_sessions.sql` in this
+  directory are retained as historical records only. Do not apply them by hand.
 
-### Using psql (Recommended)
-
-```bash
-# Apply all migrations
-psql $DATABASE_URL -f migrations/001_add_indexes.sql
-
-# Or connect to the database first
-psql $DATABASE_URL
-\i migrations/001_add_indexes.sql
-```
-
-### Using node-postgres
+## Commands
 
 ```bash
-# Using the apply-migrations script
+# Apply all pending migrations. Each file runs in its own transaction.
 npm run db:migrate
+
+# Verify checksums and report pending migrations without applying them.
+npm run db:migrate:status
+
+# Verify the journal plus required tables, columns, constraints and indexes.
+npm run db:verify
 ```
 
-## Verifying Indexes
+`npm start` runs `db:migrate` before starting the server. A migration error exits
+non-zero, so Render does not start a release on an unknown schema. Render's free
+web-service plan has no pre-deploy command; on a paid plan, move `npm run
+db:migrate` to Render's Pre-Deploy Command and change `start` back to only
+`node dist/index.js`.
 
-After applying migrations, verify that indexes were created:
+## Safety model
 
-```sql
--- List all indexes on a table
-SELECT indexname, indexdef 
-FROM pg_indexes 
-WHERE tablename = 'users';
+- `_app_migrations` stores the migration ID, SHA-256 checksum, execution time,
+  adoption flag and timestamp.
+- A PostgreSQL advisory lock prevents two deploys from migrating concurrently.
+- An existing database with all three core tables (`users`, `rooms`, `messages`)
+  adopts migration `000` without executing it, then runs reconciliation.
+- A partially-created legacy schema (only one or two core tables) is rejected and
+  requires manual inspection.
+- Editing an already applied migration causes a checksum failure. Add a new
+  numbered SQL file instead.
+- Reconciliation checks for invalid values and duplicate keys before adding
+  constraints. It fails instead of silently deleting or rewriting user data.
 
-SELECT indexname, indexdef 
-FROM pg_indexes 
-WHERE tablename = 'messages';
+## Clean-schema test
 
-SELECT indexname, indexdef 
-FROM pg_indexes 
-WHERE tablename = 'rooms';
-```
-
-## Testing Performance
-
-Test query performance with EXPLAIN ANALYZE:
-
-```sql
--- Test message query performance
-EXPLAIN ANALYZE 
-SELECT * FROM messages 
-WHERE room_id = 1 
-ORDER BY created_at DESC 
-LIMIT 50;
-
--- Should show "Index Scan" not "Seq Scan"
-
--- Test user lookup by telegram ID
-EXPLAIN ANALYZE 
-SELECT * FROM users 
-WHERE tg_id = 123456789;
-
--- Test username availability check
-EXPLAIN ANALYZE 
-SELECT * FROM users 
-WHERE LOWER(display_name) = 'testuser';
-```
-
-## Migration Files
-
-- `001_add_indexes.sql` - Initial database indexes for performance optimization
-  - Users table: tg_id, display_name (case-insensitive)
-  - Messages table: (room_id, created_at DESC), user_id
-  - Rooms table: name
-
-## Best Practices
-
-1. **Always backup** your database before applying migrations
-2. **Test migrations** in development first
-3. **Use transactions** for complex migrations (BEGIN/COMMIT/ROLLBACK)
-4. **Monitor performance** after applying indexes
-5. **Document changes** in this README
-
-## Rollback
-
-If you need to remove indexes:
-
-```sql
-DROP INDEX IF EXISTS idx_users_tg_id;
-DROP INDEX IF EXISTS idx_users_display_name;
-DROP INDEX IF EXISTS idx_messages_room_created;
-DROP INDEX IF EXISTS idx_messages_user;
-DROP INDEX IF EXISTS idx_rooms_name;
-```
+For an isolated test on an existing PostgreSQL server, create a temporary schema
+and set `MIGRATION_SCHEMA` to its name while running `db:migrate` and `db:verify`.
+Never point destructive cleanup commands at `public`; remove only the exact
+temporary schema you created.
