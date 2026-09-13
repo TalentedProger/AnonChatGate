@@ -1,4 +1,4 @@
-import type { Express } from "express";
+import type { Express, RequestHandler } from "express";
 import express from "express";
 import { createServer, type Server } from "http";
 import validator from "validator";
@@ -18,15 +18,7 @@ import { logger, logAuth, logError } from './logger';
 import * as statisticsController from './statistics';
 import { AUTH, MESSAGE, API_RATE_LIMIT, UPLOAD, SERVER } from './config';
 import { evaluateRoomAccess } from './room-access';
-
-// Dynamic import for file-type (ESM module)
-let fileTypeFromBuffer: ((buffer: Buffer) => Promise<{ ext: string; mime: string } | undefined>) | null = null;
-import('file-type').then(module => {
-  // Use 'fromBuffer' which is the correct export name
-  fileTypeFromBuffer = module.fromBuffer;
-}).catch(err => {
-  logger.warn('file-type module not available, magic bytes validation disabled');
-});
+import { InvalidImageError, storeSanitizedImage } from './image-upload';
 
 // Get __dirname equivalent in ES modules
 const __filename = fileURLToPath(import.meta.url);
@@ -40,75 +32,38 @@ if (!fs.existsSync(uploadDir)) {
   fs.mkdirSync(uploadDir, { recursive: true });
 }
 
-const storage_multer = multer.diskStorage({
-  destination: (req, file, cb) => {
-    cb(null, uploadDir);
-  },
-  filename: (req, file, cb) => {
-    // Generate unique filename: timestamp-randomstring-originalname
-    const uniqueSuffix = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}`;
-    const ext = path.extname(file.originalname);
-    const basename = path.basename(file.originalname, ext);
-    cb(null, `${basename}-${uniqueSuffix}${ext}`);
-  }
-});
-
 const upload = multer({
-  storage: storage_multer,
+  storage: multer.memoryStorage(),
   limits: {
-    fileSize: 5 * 1024 * 1024, // 5MB limit
+    fileSize: UPLOAD.MAX_FILE_SIZE,
+    files: UPLOAD.MAX_PHOTOS,
+    fields: UPLOAD.MAX_PHOTOS + 1,
   },
-  fileFilter: (req, file, cb) => {
-    // Only allow image files
-    const allowedMimes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
-    if (allowedMimes.includes(file.mimetype)) {
-      cb(null, true);
-    } else {
-      cb(new Error('Invalid file type. Only JPEG, PNG, GIF, and WebP images are allowed.'));
-    }
-  }
 });
 
-// Allowed image MIME types for magic bytes validation
-const ALLOWED_IMAGE_TYPES = new Set([
-  'image/jpeg',
-  'image/png', 
-  'image/gif',
-  'image/webp'
-]);
+function handleUploadErrors(middleware: RequestHandler): RequestHandler {
+  return (req, res, next) => {
+    middleware(req, res, (error?: unknown) => {
+      if (!error) {
+        next();
+        return;
+      }
 
-/**
- * Validate file using magic bytes (actual file content)
- * Returns true if file is a valid image, false otherwise
- */
-async function validateImageMagicBytes(filePath: string): Promise<boolean> {
-  if (!fileTypeFromBuffer) {
-    // If file-type module not available, skip validation
-    logger.warn('Skipping magic bytes validation - file-type module not loaded');
-    return true;
-  }
-  
-  try {
-    const buffer = await fs.promises.readFile(filePath);
-    const fileType = await fileTypeFromBuffer(buffer);
-    
-    if (!fileType) {
-      logger.warn({ filePath }, 'Could not determine file type from magic bytes');
-      return false;
-    }
-    
-    const isValid = ALLOWED_IMAGE_TYPES.has(fileType.mime);
-    
-    if (!isValid) {
-      logger.warn({ filePath, detectedMime: fileType.mime }, 'File magic bytes do not match allowed image types');
-    }
-    
-    return isValid;
-  } catch (error) {
-    logger.error({ error, filePath }, 'Error validating file magic bytes');
-    return false;
-  }
+      if (error instanceof multer.MulterError && error.code === 'LIMIT_FILE_SIZE') {
+        res.status(413).json({ error: 'Image is too large' });
+        return;
+      }
+
+      logger.warn({
+        multerCode: error instanceof multer.MulterError ? error.code : undefined,
+      }, 'Rejected malformed image upload');
+      res.status(400).json({ error: 'Invalid image upload' });
+    });
+  };
 }
+
+const uploadSingleImage = handleUploadErrors(upload.single('image'));
+const uploadMultipleImages = handleUploadErrors(upload.array('images', UPLOAD.MAX_PHOTOS));
 
 /**
  * Delete file from disk
@@ -902,38 +857,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Upload image endpoint
-  app.post('/api/upload/image', requireAuth, upload.single('image'), async (req, res) => {
+  app.post('/api/upload/image', requireAuth, uploadSingleImage, async (req, res) => {
     try {
       if (!req.file) {
         return res.status(400).json({ error: 'No file uploaded' });
       }
 
-      const filePath = req.file.path;
-
-      // Validate file using magic bytes (actual file content)
-      const isValidImage = await validateImageMagicBytes(filePath);
-      if (!isValidImage) {
-        // Delete the uploaded file
-        await deleteFile(filePath);
-        return res.status(400).json({ error: 'Invalid file content. Only valid image files are allowed.' });
-      }
-
-      // Generate URL for the uploaded file
-      const imageUrl = `/uploads/${req.file.filename}`;
+      const storedFile = await storeSanitizedImage(req.file.buffer, uploadDir);
+      const imageUrl = `/uploads/${storedFile.filename}`;
       
       res.json({
         success: true,
         url: imageUrl,
-        filename: req.file.filename
+        filename: storedFile.filename,
       });
     } catch (error) {
+      if (error instanceof InvalidImageError) {
+        return res.status(400).json({ error: 'Invalid image content' });
+      }
+
       logger.error({ error }, 'Image upload error');
       res.status(500).json({ error: 'Failed to upload image' });
     }
   });
 
   // Upload multiple images endpoint (for photos array)
-  app.post('/api/upload/images', requireAuth, upload.array('images', 5), async (req, res) => {
+  app.post('/api/upload/images', requireAuth, uploadMultipleImages, async (req, res) => {
+    const storedFilePaths: string[] = [];
+
     try {
       const files = req.files as Express.Multer.File[];
       
@@ -941,37 +892,38 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: 'No files uploaded' });
       }
 
-      // Validate all files using magic bytes
-      const validatedFiles: Express.Multer.File[] = [];
-      const invalidFiles: string[] = [];
+      const filenames: string[] = [];
+      let rejectedCount = 0;
 
       for (const file of files) {
-        const isValid = await validateImageMagicBytes(file.path);
-        if (isValid) {
-          validatedFiles.push(file);
-        } else {
-          invalidFiles.push(file.filename);
-          await deleteFile(file.path);
+        try {
+          const storedFile = await storeSanitizedImage(file.buffer, uploadDir);
+          filenames.push(storedFile.filename);
+          storedFilePaths.push(storedFile.path);
+        } catch (error) {
+          if (error instanceof InvalidImageError) {
+            rejectedCount += 1;
+            continue;
+          }
+
+          throw error;
         }
       }
 
-      if (validatedFiles.length === 0) {
-        return res.status(400).json({ 
-          error: 'No valid image files uploaded',
-          invalidFiles 
-        });
+      if (filenames.length === 0) {
+        return res.status(400).json({ error: 'No valid image files uploaded' });
       }
 
-      // Generate URLs for validated files only
-      const imageUrls = validatedFiles.map(file => `/uploads/${file.filename}`);
+      const imageUrls = filenames.map(filename => `/uploads/${filename}`);
       
       res.json({
         success: true,
         urls: imageUrls,
         count: imageUrls.length,
-        ...(invalidFiles.length > 0 && { rejectedCount: invalidFiles.length })
+        ...(rejectedCount > 0 && { rejectedCount }),
       });
     } catch (error) {
+      await Promise.all(storedFilePaths.map(deleteFile));
       logger.error({ error }, 'Images upload error');
       res.status(500).json({ error: 'Failed to upload images' });
     }
@@ -979,8 +931,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Serve uploaded files statically
   app.use('/uploads', (req, res, next) => {
-    // Add cache headers for better performance
     res.setHeader('Cache-Control', 'public, max-age=31536000');
+    res.setHeader('Content-Security-Policy', "default-src 'none'; sandbox");
+    res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
+    res.setHeader('X-Content-Type-Options', 'nosniff');
     next();
   }, express.static(uploadDir));
 
