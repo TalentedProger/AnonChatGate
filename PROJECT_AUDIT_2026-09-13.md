@@ -371,7 +371,11 @@ Read-only проверка показала:
   - [x] Выполнять атомарную refresh rotation без продления исходного семидневного срока; отклонять повторное использование старого токена.
   - [x] Добавить серверный отзыв сессии через `POST /api/auth/logout` и клиентский метод logout.
   - [x] Применить migration 009 к текущей БД и проверить create → rotate → replay reject → revoke; `npm run check`, 67/67 тестов и production build успешны (13.09.2026).
-- [ ] Закрыть `/api/messages` и last-message авторизацией и room membership.
+- [x] Закрыть `/api/messages` и last-message авторизацией и room membership.
+  - [x] Добавить обязательные `requireAuth` и проверку актуального пользователя/комнаты для обоих REST endpoint.
+  - [x] Разрешить глобальную комнату только пользователю `approved` с завершённым профилем; остальные типы комнат закрывать до появления явной membership-модели.
+  - [x] Применить ту же deny-by-default политику к WebSocket auth/join/send и ограничить broadcast текущей комнатой.
+  - [x] Проверить HTTP-сценарии `401/403/400/404/200` и WebSocket auth deny/allow; добавить 6 unit-тестов политики (73/73 теста успешно, 14.09.2026).
 - [ ] Защитить Telegram webhook secret token.
 - [ ] Исправить IDOR friend request response.
 - [ ] Закрыть stored-XSS класс в upload pipeline; временно можно отключить upload до безопасной реализации.

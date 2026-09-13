@@ -17,6 +17,7 @@ import { fileURLToPath } from 'url';
 import { logger, logAuth, logError } from './logger';
 import * as statisticsController from './statistics';
 import { AUTH, MESSAGE, API_RATE_LIMIT, UPLOAD, SERVER } from './config';
+import { evaluateRoomAccess } from './room-access';
 
 // Dynamic import for file-type (ESM module)
 let fileTypeFromBuffer: ((buffer: Buffer) => Promise<{ ext: string; mime: string } | undefined>) | null = null;
@@ -256,6 +257,47 @@ async function createPersistedTokenPair(user: {
   });
 
   return tokens;
+}
+
+async function requireRoomAccess(req: any, res: any, next: any) {
+  try {
+    if (!req.user?.userId) {
+      return res.status(401).json({ error: 'Authentication required', code: 'AUTH_REQUIRED' });
+    }
+
+    const user = await storage.getUserById(req.user.userId);
+    if (!user) {
+      return res.status(401).json({ error: 'User no longer exists', code: 'USER_NOT_FOUND' });
+    }
+
+    const rawRoomId = req.params.roomId;
+    let room;
+
+    if (rawRoomId !== undefined) {
+      if (typeof rawRoomId !== 'string' || !/^[1-9]\d*$/.test(rawRoomId)) {
+        return res.status(400).json({ error: 'Invalid room ID', code: 'INVALID_ROOM_ID' });
+      }
+
+      room = await storage.getRoomById(Number(rawRoomId));
+    } else {
+      room = await storage.getOrCreateGlobalRoom();
+    }
+
+    if (!room) {
+      return res.status(404).json({ error: 'Room not found', code: 'ROOM_NOT_FOUND' });
+    }
+
+    const decision = evaluateRoomAccess(user, room);
+    if (!decision.allowed) {
+      return res.status(decision.status).json({ error: decision.message, code: decision.code });
+    }
+
+    req.chatUser = user;
+    req.chatRoom = room;
+    return next();
+  } catch (error) {
+    return next(error);
+  }
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -798,19 +840,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Get chat history with optional pagination
-  app.get('/api/messages/:roomId?', async (req, res) => {
+  app.get('/api/messages/:roomId?', requireAuth, requireRoomAccess, async (req: any, res) => {
     try {
-      const roomId = req.params.roomId ? parseInt(req.params.roomId) : null;
       const limit = Math.min(parseInt(req.query.limit as string) || 50, 100); // Max 100
       const cursor = req.query.cursor ? parseInt(req.query.cursor as string) : undefined;
       const direction = (req.query.direction as 'before' | 'after') || 'before';
       const paginated = req.query.paginated === 'true';
-
-      let targetRoomId = roomId;
-      if (!targetRoomId) {
-        const globalRoom = await storage.getOrCreateGlobalRoom();
-        targetRoomId = globalRoom.id;
-      }
+      const targetRoomId = req.chatRoom.id;
 
       // Use paginated method if requested
       if (paginated || cursor) {
@@ -962,7 +998,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.get('/api/statistics/chat/:roomId?', statisticsController.getChatStatistics);
 
   // Get last message in room
-  app.get('/api/statistics/last-message/:roomId', statisticsController.getLastMessage);
+  app.get('/api/statistics/last-message/:roomId', requireAuth, requireRoomAccess, statisticsController.getLastMessage);
 
   // Get top popular users
   app.get('/api/statistics/top-users', statisticsController.getTopPopularUsers);

@@ -8,10 +8,12 @@ import { logger, logWebSocket, logError } from './logger';
 import { db } from './db';
 import { eq, sql } from 'drizzle-orm';
 import { RATE_LIMIT, MESSAGE, WEBSOCKET } from './config';
+import { evaluateRoomAccess } from './room-access';
 
 interface AuthenticatedWebSocket extends WebSocket {
   userId?: number;
   userStatus?: string;
+  roomId?: number;
 }
 
 // Rate limiting for WebSocket messages
@@ -286,15 +288,31 @@ export function setupWebSocket(server: Server) {
       if (!user) {
         logger.warn({ userId: tokenData.userId }, 'WebSocket: User not found in database');
         ws.send(JSON.stringify({
-          type: 'error',
-          message: 'User not found'
+          type: 'auth_error',
+          message: 'User not found',
+          code: 'USER_NOT_FOUND'
         }));
+        ws.close(1008, 'User not found');
+        return;
+      }
+
+      const globalRoom = await storage.getOrCreateGlobalRoom();
+      const accessDecision = evaluateRoomAccess(user, globalRoom);
+      if (!accessDecision.allowed) {
+        ws.send(JSON.stringify({
+          type: 'auth_error',
+          message: accessDecision.message,
+          code: accessDecision.code,
+          redirectTo: accessDecision.code === 'PROFILE_INCOMPLETE' ? '/register' : undefined,
+        }));
+        ws.close(1008, 'Chat access denied');
         return;
       }
       
       // Authentication successful
       ws.userId = user.id;
       ws.userStatus = user.status;
+      ws.roomId = globalRoom.id;
       
       // Emit authenticated event to close duplicate connections
       ws.emit('authenticated', user.id);
@@ -302,7 +320,6 @@ export function setupWebSocket(server: Server) {
       logWebSocket('auth_success', user.id);
 
       // Load chat history
-      const globalRoom = await storage.getOrCreateGlobalRoom();
       const messages = await storage.getMessagesByRoomId(globalRoom.id, 50);
 
       ws.send(JSON.stringify({
@@ -367,23 +384,43 @@ export function setupWebSocket(server: Server) {
         }
       }
 
-      // Check if user has completed their profile
+      // Refresh the user's access state before accepting a message.
       const currentUser = await storage.getUserById(ws.userId);
-      if (currentUser && currentUser.profileCompleted !== 'true') {
+      if (!currentUser) {
         ws.send(JSON.stringify({
           type: 'error',
-          message: 'Please complete your profile before sending messages',
-          code: 'PROFILE_INCOMPLETE',
-          redirectTo: '/register'
+          message: 'User not found',
+          code: 'USER_NOT_FOUND'
         }));
         return;
       }
 
       const { content, roomId, replyTo } = message;
-      
-      // Validate message using insertMessageSchema
       const globalRoom = await storage.getOrCreateGlobalRoom();
-      const targetRoomId = roomId || globalRoom.id;
+      const accessDecision = evaluateRoomAccess(currentUser, globalRoom);
+      if (!accessDecision.allowed) {
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: accessDecision.message,
+          code: accessDecision.code,
+          redirectTo: accessDecision.code === 'PROFILE_INCOMPLETE' ? '/register' : undefined,
+        }));
+        return;
+      }
+
+      const targetRoomId = roomId ?? globalRoom.id;
+      if (!Number.isInteger(targetRoomId) || targetRoomId !== globalRoom.id) {
+        ws.send(JSON.stringify({
+          type: 'error',
+          message: 'You are not a member of this room',
+          code: 'ROOM_ACCESS_DENIED'
+        }));
+        return;
+      }
+
+      ws.roomId = targetRoomId;
+
+      // Validate message using insertMessageSchema
 
       const messageData = {
         content: content,
@@ -480,7 +517,7 @@ export function setupWebSocket(server: Server) {
       wss.clients.forEach((client: AuthenticatedWebSocket) => {
         if (client.readyState === WebSocket.OPEN && 
             client.userId && 
-            client.userId) {
+            client.roomId === targetRoomId) {
           client.send(broadcastData);
         }
       });
@@ -506,8 +543,47 @@ export function setupWebSocket(server: Server) {
   }
 
   async function handleJoinRoom(ws: AuthenticatedWebSocket, message: any) {
-    // For MVP, we only have global room
+    if (!ws.userId) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'Not authenticated',
+        code: 'AUTH_REQUIRED'
+      }));
+      return;
+    }
+
+    const currentUser = await storage.getUserById(ws.userId);
+    if (!currentUser) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'User not found',
+        code: 'USER_NOT_FOUND'
+      }));
+      return;
+    }
+
     const globalRoom = await storage.getOrCreateGlobalRoom();
+    const accessDecision = evaluateRoomAccess(currentUser, globalRoom);
+    if (!accessDecision.allowed) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: accessDecision.message,
+        code: accessDecision.code,
+      }));
+      return;
+    }
+
+    const requestedRoomId = message.roomId ?? globalRoom.id;
+    if (!Number.isInteger(requestedRoomId) || requestedRoomId !== globalRoom.id) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        message: 'You are not a member of this room',
+        code: 'ROOM_ACCESS_DENIED'
+      }));
+      return;
+    }
+
+    ws.roomId = globalRoom.id;
     ws.send(JSON.stringify({
       type: 'joined_room',
       roomId: globalRoom.id,
