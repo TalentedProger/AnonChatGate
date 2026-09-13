@@ -31,6 +31,14 @@ export const API_RATE_LIMIT = {
   AUTH_MAX_REQUESTS: 20,
 } as const;
 
+export const TELEGRAM_WEBHOOK = {
+  /** Webhook requests accepted per minute after secret validation. */
+  WINDOW_MS: 60 * 1000,
+  MAX_REQUESTS: 600,
+  /** Telegram Bot API allows 1-256 characters from this alphabet. */
+  SECRET_PATTERN: /^[A-Za-z0-9_-]{32,256}$/,
+} as const;
+
 // ============================================
 // Message Configuration
 // ============================================

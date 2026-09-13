@@ -4,6 +4,7 @@ import { logger } from './logger';
 import crypto from 'crypto';
 
 const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || process.env.BOT_TOKEN || '';
+const WEBHOOK_SECRET = process.env.TELEGRAM_WEBHOOK_SECRET || '';
 const ADMIN_USER_ID = process.env.TELEGRAM_ADMIN_ID || process.env.ADMIN_ID || '681943543';
 
 // Track error state for exponential backoff
@@ -204,6 +205,11 @@ async function setupWebhook() {
     logger.info('[Telegram Bot] Skipping webhook setup (not in webhook mode or no BASE_URL)');
     return;
   }
+
+  if (!WEBHOOK_SECRET) {
+    logger.error('[Telegram Bot] TELEGRAM_WEBHOOK_SECRET is required in webhook mode');
+    return;
+  }
   
   const webhookUrl = `${BASE_URL}/api/telegram-webhook`;
   
@@ -213,7 +219,8 @@ async function setupWebhook() {
     
     // Set new webhook with allowed updates
     const result = await bot.setWebHook(webhookUrl, {
-      allowed_updates: ['message', 'callback_query']
+      allowed_updates: ['message', 'callback_query'],
+      secret_token: WEBHOOK_SECRET,
     } as any);
     
     if (result) {

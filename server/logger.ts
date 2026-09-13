@@ -45,6 +45,8 @@ export const logger = pino({
       '*.token',
       'req.headers.authorization',
       'req.headers.cookie',
+      'req.headers.x-telegram-bot-api-secret-token',
+      '*.webhookSecret',
     ],
     censor: '[REDACTED]'
   },

@@ -16,7 +16,8 @@ import { db, runMigrations } from "./db";
 import { users, rooms } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { logger, logRequest, logError } from "./logger";
-import { API_RATE_LIMIT, SERVER } from "./config";
+import { API_RATE_LIMIT, SERVER, TELEGRAM_WEBHOOK } from "./config";
+import { requireTelegramWebhookSecret } from "./webhook-security";
 
 // ============================================================================
 // ENVIRONMENT VALIDATION
@@ -99,6 +100,21 @@ function validateEnvironment(): ValidationError[] {
     });
   }
 
+  const webhookSecret = process.env.TELEGRAM_WEBHOOK_SECRET;
+  if (isProduction && !webhookSecret) {
+    errors.push({
+      variable: 'TELEGRAM_WEBHOOK_SECRET',
+      issue: 'Required in production to authenticate Telegram webhook requests',
+      severity: 'error'
+    });
+  } else if (webhookSecret && !TELEGRAM_WEBHOOK.SECRET_PATTERN.test(webhookSecret)) {
+    errors.push({
+      variable: 'TELEGRAM_WEBHOOK_SECRET',
+      issue: 'Must be 32-256 characters containing only A-Z, a-z, 0-9, underscore, or hyphen',
+      severity: 'error'
+    });
+  }
+
   return errors;
 }
 
@@ -141,6 +157,17 @@ logger.info('✅ Environment validation passed\n');
 
 const app = express();
 
+// Authenticate the webhook before parsing its JSON body. Only authenticated
+// Telegram traffic consumes the webhook-specific rate-limit budget.
+const telegramWebhookLimiter = rateLimit({
+  windowMs: TELEGRAM_WEBHOOK.WINDOW_MS,
+  limit: TELEGRAM_WEBHOOK.MAX_REQUESTS,
+  message: { error: 'Too many Telegram webhook requests' },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use('/api/telegram-webhook', requireTelegramWebhookSecret, telegramWebhookLimiter);
+
 // CORS configuration - ONLY for API routes, not for static files
 const corsOptions: cors.CorsOptions = {
   origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
@@ -155,7 +182,7 @@ const corsOptions: cors.CorsOptions = {
   },
   credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Telegram-Init-Data', 'X-Telegram-Bot-Api-Secret-Token'],
 };
 
 // Apply CORS only to API routes, not static files
