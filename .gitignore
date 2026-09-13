@@ -12,6 +12,9 @@ vite.config.ts.*
 .env.production
 .env.development
 
+# Local IDE/agent state (may contain prompts, environment snapshots, or secrets)
+.local/
+
 # Uploads directory (user-generated content)
 uploads/
 
