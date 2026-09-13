@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
-import { generateAuthToken, generateRefreshToken, verifyAuthToken, verifyRefreshToken, isTokenExpired } from '../auth';
+import jwt from 'jsonwebtoken';
+import { generateAuthToken, generateRefreshToken, generateTokenPair, hashRefreshToken, verifyAuthToken, verifyRefreshToken, isTokenExpired } from '../auth';
 
 describe('Auth Module', () => {
   const testUser = {
@@ -7,6 +8,7 @@ describe('Auth Module', () => {
     anonName: 'Student_1',
     status: 'approved'
   };
+  const sessionId = '22222222-2222-4222-8222-222222222222';
 
   let originalEnv: string | undefined;
   
@@ -28,7 +30,7 @@ describe('Auth Module', () => {
 
   describe('generateAuthToken', () => {
     it('should generate a valid JWT token', () => {
-      const token = generateAuthToken(testUser);
+      const token = generateAuthToken(testUser, sessionId);
       
       expect(token).toBeDefined();
       expect(typeof token).toBe('string');
@@ -36,18 +38,20 @@ describe('Auth Module', () => {
     });
 
     it('should include user data in token payload', () => {
-      const token = generateAuthToken(testUser);
+      const token = generateAuthToken(testUser, sessionId);
       const verified = verifyAuthToken(token);
       
       expect(verified).toBeDefined();
       expect(verified?.userId).toBe(testUser.id);
       expect(verified?.anonName).toBe(testUser.anonName);
       expect(verified?.status).toBe(testUser.status);
+      expect(verified?.sessionId).toBe(sessionId);
+      expect(verified?.tokenId).toBeTruthy();
     });
 
     it('should generate different tokens for different users', () => {
-      const token1 = generateAuthToken(testUser);
-      const token2 = generateAuthToken({ ...testUser, id: 2, anonName: 'Student_2' });
+      const token1 = generateAuthToken(testUser, sessionId);
+      const token2 = generateAuthToken({ ...testUser, id: 2, anonName: 'Student_2' }, sessionId);
       
       expect(token1).not.toBe(token2);
     });
@@ -55,7 +59,7 @@ describe('Auth Module', () => {
 
   describe('generateRefreshToken', () => {
     it('should generate a valid refresh token', () => {
-      const token = generateRefreshToken(testUser);
+      const token = generateRefreshToken(testUser, sessionId);
       
       expect(token).toBeDefined();
       expect(typeof token).toBe('string');
@@ -63,32 +67,33 @@ describe('Auth Module', () => {
     });
 
     it('should be verifiable as refresh token', () => {
-      const token = generateRefreshToken(testUser);
+      const token = generateRefreshToken(testUser, sessionId);
       const verified = verifyRefreshToken(token);
       
       expect(verified).toBeDefined();
       expect(verified?.userId).toBe(testUser.id);
       expect(verified?.anonName).toBe(testUser.anonName);
       expect(verified?.status).toBe(testUser.status);
+      expect(verified?.sessionId).toBe(sessionId);
+      expect(verified?.tokenId).toBeTruthy();
     });
 
     it('should not verify refresh token as auth token type', () => {
-      const refreshToken = generateRefreshToken(testUser);
-      const authToken = generateAuthToken(testUser);
+      const refreshToken = generateRefreshToken(testUser, sessionId);
+      const authToken = generateAuthToken(testUser, sessionId);
       
       // Both should verify with their respective functions
       expect(verifyRefreshToken(refreshToken)).toBeDefined();
       expect(verifyAuthToken(authToken)).toBeDefined();
       
-      // Refresh token should not verify as regular auth token (different type field)
-      // Note: verifyAuthToken will still work because it doesn't check type,
-      // but in production the type distinction helps prevent token misuse
+      expect(verifyAuthToken(refreshToken)).toBeNull();
+      expect(verifyRefreshToken(authToken)).toBeNull();
     });
   });
 
   describe('verifyAuthToken', () => {
     it('should verify valid auth token', () => {
-      const token = generateAuthToken(testUser);
+      const token = generateAuthToken(testUser, sessionId);
       const verified = verifyAuthToken(token);
       
       expect(verified).not.toBeNull();
@@ -108,7 +113,7 @@ describe('Auth Module', () => {
     });
 
     it('should return null for token with wrong signature', () => {
-      const token = generateAuthToken(testUser);
+      const token = generateAuthToken(testUser, sessionId);
       const tamperedToken = token.slice(0, -10) + 'tampered12';
       const verified = verifyAuthToken(tamperedToken);
       
@@ -118,7 +123,7 @@ describe('Auth Module', () => {
 
   describe('verifyRefreshToken', () => {
     it('should verify valid refresh token', () => {
-      const token = generateRefreshToken(testUser);
+      const token = generateRefreshToken(testUser, sessionId);
       const verified = verifyRefreshToken(token);
       
       expect(verified).not.toBeNull();
@@ -126,7 +131,7 @@ describe('Auth Module', () => {
     });
 
     it('should return null for auth token verified as refresh', () => {
-      const authToken = generateAuthToken(testUser);
+      const authToken = generateAuthToken(testUser, sessionId);
       const verified = verifyRefreshToken(authToken);
       
       // Should return null because auth token doesn't have type: 'refresh'
@@ -142,7 +147,7 @@ describe('Auth Module', () => {
 
   describe('isTokenExpired', () => {
     it('should return false for fresh token', () => {
-      const token = generateAuthToken(testUser);
+      const token = generateAuthToken(testUser, sessionId);
       const expired = isTokenExpired(token);
       
       expect(expired).toBe(false);
@@ -165,7 +170,7 @@ describe('Auth Module', () => {
         status: 'approved'
       };
       
-      const token = generateAuthToken(userWithoutName);
+      const token = generateAuthToken(userWithoutName, sessionId);
       const verified = verifyAuthToken(token);
       
       expect(verified).toBeDefined();
@@ -177,14 +182,67 @@ describe('Auth Module', () => {
       const pendingUser = { ...testUser, status: 'pending' };
       const rejectedUser = { ...testUser, status: 'rejected' };
       
-      const token1 = generateAuthToken(pendingUser);
-      const token2 = generateAuthToken(rejectedUser);
+      const token1 = generateAuthToken(pendingUser, sessionId);
+      const token2 = generateAuthToken(rejectedUser, sessionId);
       
       const verified1 = verifyAuthToken(token1);
       const verified2 = verifyAuthToken(token2);
       
       expect(verified1?.status).toBe('pending');
       expect(verified2?.status).toBe('rejected');
+    });
+  });
+
+  describe('security claims and rotation material', () => {
+    it('adds strict standard and custom claims to both token types', () => {
+      const pair = generateTokenPair(testUser, { sessionId });
+      const access = jwt.decode(pair.token) as jwt.JwtPayload;
+      const refresh = jwt.decode(pair.refreshToken) as jwt.JwtPayload;
+
+      expect(access).toMatchObject({
+        typ: 'access',
+        iss: 'anonchatgate',
+        aud: 'anonchatgate-web',
+        sub: String(testUser.id),
+        sid: sessionId,
+      });
+      expect(refresh).toMatchObject({
+        typ: 'refresh',
+        iss: 'anonchatgate',
+        aud: 'anonchatgate-web',
+        sub: String(testUser.id),
+        sid: sessionId,
+      });
+      expect(access.jti).toBeTruthy();
+      expect(refresh.jti).toBe(pair.refreshTokenId);
+    });
+
+    it('uses different signing keys for access and refresh tokens', () => {
+      const pair = generateTokenPair(testUser, { sessionId });
+
+      expect(verifyAuthToken(pair.refreshToken)).toBeNull();
+      expect(verifyRefreshToken(pair.token)).toBeNull();
+    });
+
+    it('hashes refresh tokens without storing the bearer credential', () => {
+      const pair = generateTokenPair(testUser, { sessionId });
+      const hash = hashRefreshToken(pair.refreshToken);
+
+      expect(hash).toHaveLength(64);
+      expect(hash).not.toContain(pair.refreshToken);
+      expect(hashRefreshToken(pair.refreshToken)).toBe(hash);
+    });
+
+    it('creates a new refresh jti for every rotation', () => {
+      const first = generateTokenPair(testUser, { sessionId });
+      const second = generateTokenPair(testUser, {
+        sessionId,
+        refreshExpiresAtSeconds: Math.floor(first.refreshExpiresAt.getTime() / 1000),
+      });
+
+      expect(second.refreshTokenId).not.toBe(first.refreshTokenId);
+      expect(second.refreshToken).not.toBe(first.refreshToken);
+      expect(second.refreshExpiresAt).toEqual(first.refreshExpiresAt);
     });
   });
 });

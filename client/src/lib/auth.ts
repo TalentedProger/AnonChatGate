@@ -365,6 +365,26 @@ class AuthManager {
     return this.doRefreshToken();
   }
 
+  // Revoke the server-side refresh session, then clear local credentials.
+  async logout(): Promise<void> {
+    const refreshToken = this.authState.refreshToken;
+
+    try {
+      if (refreshToken) {
+        await fetch('/api/auth/logout', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ refreshToken }),
+          credentials: 'include'
+        });
+      }
+    } catch (error) {
+      console.warn('[Auth] Server-side logout failed; clearing local session', error);
+    } finally {
+      this.clearAuth();
+    }
+  }
+
   // Handle auth error (e.g., from WebSocket or API 401)
   async handleAuthError(): Promise<boolean> {
     console.log('[Auth] Handling auth error');
@@ -459,6 +479,7 @@ export function useAuth() {
   return {
     ...authState,
     doRefreshToken: () => authManager.refreshToken(),
+    logout: () => authManager.logout(),
     getValidToken: () => authManager.getValidToken(),
     getCurrentToken: () => authManager.getCurrentToken(),
     handleAuthError: () => authManager.handleAuthError(),

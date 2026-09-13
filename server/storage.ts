@@ -1,6 +1,6 @@
-import { users, messages, rooms, favorites, friendRequests, type User, type InsertUser, type InsertProfile, type Message, type InsertMessage, type Room, type InsertRoom, type Favorite, type InsertFavorite, type FriendRequest, type InsertFriendRequest } from "@shared/schema";
+import { users, messages, rooms, favorites, friendRequests, authSessions, type User, type InsertUser, type InsertProfile, type Message, type InsertMessage, type Room, type InsertRoom, type Favorite, type InsertFavorite, type FriendRequest, type InsertFriendRequest, type AuthSession, type InsertAuthSession } from "@shared/schema";
 import { db } from "./db";
-import { eq, desc, lt, gt, and, sql, ne } from "drizzle-orm";
+import { eq, desc, lt, gt, and, sql, ne, isNull } from "drizzle-orm";
 import { MESSAGE } from "./config";
 
 export interface PaginatedMessages {
@@ -19,6 +19,18 @@ export interface IStorage {
   updateUser(id: number, data: Partial<User>): Promise<User | undefined>;
   updateUserProfile(id: number, profile: InsertProfile): Promise<User | undefined>;
   markProfileCompleted(id: number): Promise<User | undefined>;
+
+  // Authentication session operations
+  createAuthSession(session: InsertAuthSession): Promise<AuthSession>;
+  rotateAuthSession(input: {
+    sessionId: string;
+    userId: number;
+    previousTokenHash: string;
+    previousTokenId: string;
+    nextTokenHash: string;
+    nextTokenId: string;
+  }): Promise<AuthSession | undefined>;
+  revokeAuthSession(sessionId: string, userId: number, tokenHash: string): Promise<boolean>;
 
   // Message operations
   getMessagesByRoomId(roomId: number, limit?: number): Promise<(Message & { user: User | null })[]>;
@@ -211,6 +223,58 @@ export class DatabaseStorage implements IStorage {
       .where(eq(users.id, id))
       .returning();
     return user || undefined;
+  }
+
+  async createAuthSession(session: InsertAuthSession): Promise<AuthSession> {
+    const [createdSession] = await db
+      .insert(authSessions)
+      .values(session)
+      .returning();
+
+    return createdSession;
+  }
+
+  async rotateAuthSession(input: {
+    sessionId: string;
+    userId: number;
+    previousTokenHash: string;
+    previousTokenId: string;
+    nextTokenHash: string;
+    nextTokenId: string;
+  }): Promise<AuthSession | undefined> {
+    const [rotatedSession] = await db
+      .update(authSessions)
+      .set({
+        refreshTokenHash: input.nextTokenHash,
+        refreshTokenJti: input.nextTokenId,
+        updatedAt: new Date(),
+      })
+      .where(and(
+        eq(authSessions.id, input.sessionId),
+        eq(authSessions.userId, input.userId),
+        eq(authSessions.refreshTokenHash, input.previousTokenHash),
+        eq(authSessions.refreshTokenJti, input.previousTokenId),
+        isNull(authSessions.revokedAt),
+        gt(authSessions.expiresAt, new Date()),
+      ))
+      .returning();
+
+    return rotatedSession || undefined;
+  }
+
+  async revokeAuthSession(sessionId: string, userId: number, tokenHash: string): Promise<boolean> {
+    const [revokedSession] = await db
+      .update(authSessions)
+      .set({ revokedAt: new Date(), updatedAt: new Date() })
+      .where(and(
+        eq(authSessions.id, sessionId),
+        eq(authSessions.userId, userId),
+        eq(authSessions.refreshTokenHash, tokenHash),
+        isNull(authSessions.revokedAt),
+      ))
+      .returning({ id: authSessions.id });
+
+    return Boolean(revokedSession);
   }
 
   async getOrCreateGlobalRoom(): Promise<Room> {

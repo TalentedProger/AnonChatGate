@@ -5,7 +5,7 @@ import validator from "validator";
 import { storage } from "./storage";
 import { setupWebSocket } from "./websocket";
 import { insertUserSchema, insertProfileSchema, usernameSchema, users } from "@shared/schema";
-import { generateAuthToken, generateRefreshToken, verifyRefreshToken, verifyAuthToken } from "./auth";
+import { generateTokenPair, hashRefreshToken, verifyRefreshToken, verifyAuthToken } from "./auth";
 import { db } from "./db";
 import { eq } from "drizzle-orm";
 import crypto from 'crypto';
@@ -240,6 +240,24 @@ function requireAuth(req: any, res: any, next: any) {
   next();
 }
 
+async function createPersistedTokenPair(user: {
+  id: number;
+  anonName: string | null;
+  status: string;
+}) {
+  const tokens = generateTokenPair(user);
+
+  await storage.createAuthSession({
+    id: tokens.sessionId,
+    userId: user.id,
+    refreshTokenHash: hashRefreshToken(tokens.refreshToken),
+    refreshTokenJti: tokens.refreshTokenId,
+    expiresAt: tokens.refreshExpiresAt,
+  });
+
+  return tokens;
+}
+
 export async function registerRoutes(app: Express): Promise<Server> {
   const httpServer = createServer(app);
 
@@ -330,8 +348,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         logger.debug({ userId: user.id, tgId: user.tgId }, '[DEV AUTH] Created new user with unique tgId');
       }
 
-      const token = generateAuthToken(user);
-      const refreshToken = generateRefreshToken(user);
+      const { token, refreshToken } = await createPersistedTokenPair(user);
 
       logAuth('dev_auth', user.id, true);
       logger.debug({ userId: user.id, anonName: user.anonName }, '[DEV AUTH] Authenticated user');
@@ -419,8 +436,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         user.telegramPhotoUrl = userData.photo_url;
       }
 
-      const token = generateAuthToken(user);
-      const refreshToken = generateRefreshToken(user);
+      const { token, refreshToken } = await createPersistedTokenPair(user);
 
       logAuth('telegram_auth', user.id, true);
 
@@ -467,12 +483,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Check if user status matches token (prevent using old tokens after status change)
       if (user.status !== tokenData.status) {
+        await storage.revokeAuthSession(
+          tokenData.sessionId,
+          tokenData.userId,
+          hashRefreshToken(refreshToken),
+        );
         return res.status(401).json({ error: 'User status has changed. Please re-authenticate' });
       }
 
-      // Generate new tokens
-      const newToken = generateAuthToken(user);
-      const newRefreshToken = generateRefreshToken(user);
+      // Rotate the refresh token without extending the session's original 7-day lifetime.
+      const nextTokens = generateTokenPair(user, {
+        sessionId: tokenData.sessionId,
+        refreshExpiresAtSeconds: tokenData.expiresAt,
+      });
+
+      const rotatedSession = await storage.rotateAuthSession({
+        sessionId: tokenData.sessionId,
+        userId: tokenData.userId,
+        previousTokenHash: hashRefreshToken(refreshToken),
+        previousTokenId: tokenData.tokenId,
+        nextTokenHash: hashRefreshToken(nextTokens.refreshToken),
+        nextTokenId: nextTokens.refreshTokenId,
+      });
+
+      if (!rotatedSession) {
+        logger.warn({ userId: tokenData.userId, sessionId: tokenData.sessionId }, 'Refresh token replay or revoked session rejected');
+        return res.status(401).json({ error: 'Refresh token has already been used or revoked' });
+      }
 
       logAuth('token_refresh', user.id, true);
 
@@ -484,8 +521,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           createdAt: user.createdAt,
         },
         status: user.status,
-        token: newToken,
-        refreshToken: newRefreshToken
+        token: nextTokens.token,
+        refreshToken: nextTokens.refreshToken
       });
 
     } catch (error) {
@@ -493,6 +530,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         logError(error, { context: 'token_refresh' });
       }
       res.status(500).json({ error: 'Token refresh failed' });
+    }
+  });
+
+  // Revoke the current refresh-token session. The access token naturally expires within 15 minutes.
+  app.post('/api/auth/logout', async (req, res) => {
+    try {
+      const refreshToken = typeof req.body?.refreshToken === 'string' ? req.body.refreshToken : '';
+      const tokenData = refreshToken ? verifyRefreshToken(refreshToken) : null;
+
+      if (tokenData) {
+        await storage.revokeAuthSession(
+          tokenData.sessionId,
+          tokenData.userId,
+          hashRefreshToken(refreshToken),
+        );
+        logAuth('logout', tokenData.userId, true);
+      }
+
+      // Logout is deliberately idempotent and does not disclose token/session validity.
+      return res.sendStatus(204);
+    } catch (error) {
+      if (error instanceof Error) {
+        logError(error, { context: 'logout' });
+      }
+      return res.status(500).json({ error: 'Logout failed' });
     }
   });
 

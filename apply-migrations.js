@@ -58,6 +58,14 @@ async function applyMigrations() {
     await client.query(migration8Sql);
     console.log('✅ Migration 008 applied successfully');
 
+    // Apply migration 009 - Add revocable auth sessions
+    const migration9Path = join(__dirname, 'migrations', '009_add_auth_sessions.sql');
+    const migration9Sql = readFileSync(migration9Path, 'utf8');
+
+    console.log('Applying migration: 009_add_auth_sessions.sql');
+    await client.query(migration9Sql);
+    console.log('Migration 009 applied successfully');
+
     // Verify indexes were created
     console.log('\n📊 Verifying indexes...');
     

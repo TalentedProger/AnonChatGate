@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, bigint, serial, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, bigint, serial, integer, uuid, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 import { relations } from "drizzle-orm";
@@ -23,6 +23,20 @@ export const users = pgTable("users", {
   profileCompleted: text("profile_completed", { enum: ["true", "false"] }).default("false"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
+
+export const authSessions = pgTable("auth_sessions", {
+  id: uuid("id").primaryKey(),
+  userId: integer("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  refreshTokenHash: varchar("refresh_token_hash", { length: 64 }).notNull().unique(),
+  refreshTokenJti: uuid("refresh_token_jti").notNull().unique(),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  revokedAt: timestamp("revoked_at", { withTimezone: true }),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull(),
+}, (table) => [
+  index("idx_auth_sessions_user_id").on(table.userId),
+  index("idx_auth_sessions_expires_at").on(table.expiresAt),
+]);
 
 export const rooms = pgTable("rooms", {
   id: serial("id").primaryKey(),
@@ -83,6 +97,14 @@ export const favorites = pgTable("favorites", {
 
 export const usersRelations = relations(users, ({ many }) => ({
   messages: many(messages),
+  authSessions: many(authSessions),
+}));
+
+export const authSessionsRelations = relations(authSessions, ({ one }) => ({
+  user: one(users, {
+    fields: [authSessions.userId],
+    references: [users.id],
+  }),
 }));
 
 export const roomsRelations = relations(rooms, ({ many }) => ({
@@ -156,6 +178,8 @@ export const insertFriendRequestSchema = createInsertSchema(friendRequests).omit
 export type InsertUser = z.infer<typeof insertUserSchema>;
 export type InsertProfile = z.infer<typeof insertProfileSchema>;
 export type User = typeof users.$inferSelect;
+export type AuthSession = typeof authSessions.$inferSelect;
+export type InsertAuthSession = typeof authSessions.$inferInsert;
 export type InsertMessage = z.infer<typeof insertMessageSchema>;
 export type Message = typeof messages.$inferSelect;
 export type InsertRoom = z.infer<typeof insertRoomSchema>;

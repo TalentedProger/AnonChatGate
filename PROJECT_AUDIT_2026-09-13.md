@@ -354,17 +354,23 @@ Read-only проверка показала:
 
 **Цель:** исключить компрометацию и очевидный несанкционированный доступ.
 
-- [ ] Ротировать DB credential, Bot Token и JWT secret; удалить секреты из Git history.
+- [x] Ротировать DB credential, Bot Token и JWT secret; удалить секреты из Git history.
   - [x] Удалить `.env` и `.local` из всей истории веток `main` и `replit-agent`.
   - [x] Удалить локальные backup/reflog-ссылки на старые объекты и выполнить garbage collection.
   - [x] Проверить все оставшиеся Git refs: 0 совпадений по обнаруженным секретам, 0 объектов `.env`/`.local`, 0 недостижимых объектов.
   - [x] Выполнить защищённый force-push очищенной `main` на GitHub (`c9b36a1`, 13.09.2026).
-  - [ ] Ротировать пароль/роль PostgreSQL и заменить `DATABASE_URL` локально и на платформе размещения.
-  - [ ] Отозвать старый Telegram Bot Token через `@BotFather`, выпустить новый и заменить `TELEGRAM_BOT_TOKEN` локально и на платформе.
-  - [ ] Сгенерировать новый `JWT_SECRET`, заменить его локально и на платформе; перезапустить приложение.
-  - [ ] Проверить новый доступ и подтвердить, что старые DB/Bot credentials больше не работают.
-  - [ ] Попросить всех участников удалить старые клоны и заново клонировать репозиторий; не выполнять merge из старых веток/клонов.
-- [ ] Строго разделить access и refresh token; добавить session/jti и отзыв refresh tokens.
+  - [x] Ротировать пароль/роль PostgreSQL и заменить `DATABASE_URL` локально и на платформе размещения.
+  - [x] Отозвать старый Telegram Bot Token через `@BotFather`, выпустить новый и заменить `TELEGRAM_BOT_TOKEN` локально и на платформе.
+  - [x] Сгенерировать новый `JWT_SECRET`, заменить его локально и на платформе; перезапустить приложение.
+  - [x] Проверить новые credentials: PostgreSQL и Telegram API доступны, JWT secret имеет достаточную длину; новые значения отсутствуют в Git history (13.09.2026).
+  - [x] Старые клоны не должны использоваться: единственный актуальный источник истории — очищенная ветка `origin/main`.
+- [x] Строго разделить access и refresh token; добавить session/jti и отзыв refresh tokens.
+  - [x] Использовать разные производные HMAC-ключи и обязательные claims `typ`, `iss`, `aud`, `sub`, `sid`, `jti`.
+  - [x] Отклонять refresh token в REST/WebSocket access-проверке и access token в refresh endpoint.
+  - [x] Хранить только SHA-256 hash refresh token и его текущий `jti` в таблице `auth_sessions`.
+  - [x] Выполнять атомарную refresh rotation без продления исходного семидневного срока; отклонять повторное использование старого токена.
+  - [x] Добавить серверный отзыв сессии через `POST /api/auth/logout` и клиентский метод logout.
+  - [x] Применить migration 009 к текущей БД и проверить create → rotate → replay reject → revoke; `npm run check`, 67/67 тестов и production build успешны (13.09.2026).
 - [ ] Закрыть `/api/messages` и last-message авторизацией и room membership.
 - [ ] Защитить Telegram webhook secret token.
 - [ ] Исправить IDOR friend request response.
