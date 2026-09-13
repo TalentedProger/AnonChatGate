@@ -144,6 +144,7 @@ export function generateTokenPair(
 function verifyToken(
   token: string,
   expectedType: typeof ACCESS_TOKEN_TYPE | typeof REFRESH_TOKEN_TYPE,
+  logSuccess = true,
 ): VerifiedToken | null {
   try {
     const decoded = jwt.verify(token, getSigningKey(expectedType), {
@@ -171,7 +172,9 @@ function verifyToken(
       return null;
     }
 
-    logAuth(expectedType === ACCESS_TOKEN_TYPE ? 'verify_token' : 'verify_refresh_token', payload.userId, true);
+    if (logSuccess) {
+      logAuth(expectedType === ACCESS_TOKEN_TYPE ? 'verify_token' : 'verify_refresh_token', payload.userId, true);
+    }
 
     return {
       userId: payload.userId,
@@ -189,12 +192,18 @@ function verifyToken(
   }
 }
 
-export function verifyAuthToken(token: string): VerifiedToken | null {
-  return verifyToken(token, ACCESS_TOKEN_TYPE);
+export function verifyAuthToken(
+  token: string,
+  options: { logSuccess?: boolean } = {},
+): VerifiedToken | null {
+  return verifyToken(token, ACCESS_TOKEN_TYPE, options.logSuccess !== false);
 }
 
-export function verifyRefreshToken(token: string): VerifiedToken | null {
-  return verifyToken(token, REFRESH_TOKEN_TYPE);
+export function verifyRefreshToken(
+  token: string,
+  options: { logSuccess?: boolean } = {},
+): VerifiedToken | null {
+  return verifyToken(token, REFRESH_TOKEN_TYPE, options.logSuccess !== false);
 }
 
 export function hashRefreshToken(token: string): string {

@@ -18,6 +18,11 @@ import { eq } from "drizzle-orm";
 import { logger, logRequest, logError } from "./logger";
 import { API_RATE_LIMIT, SERVER, TELEGRAM_WEBHOOK } from "./config";
 import { requireTelegramWebhookSecret } from "./webhook-security";
+import {
+  accessUserRateLimitKey,
+  clientIpRateLimitKey,
+  refreshUserRateLimitKey,
+} from "./rate-limit-security";
 
 // ============================================================================
 // ENVIRONMENT VALIDATION
@@ -157,11 +162,17 @@ logger.info('✅ Environment validation passed\n');
 
 const app = express();
 
+// Render terminates public traffic at its reverse proxy. Trust only the nearest
+// proxy hop there; rate-limit identity additionally uses Render's edge-provided
+// CF-Connecting-IP header instead of a caller-controlled forwarded chain.
+app.set('trust proxy', process.env.RENDER === 'true' ? 1 : false);
+
 // Authenticate the webhook before parsing its JSON body. Only authenticated
 // Telegram traffic consumes the webhook-specific rate-limit budget.
 const telegramWebhookLimiter = rateLimit({
   windowMs: TELEGRAM_WEBHOOK.WINDOW_MS,
   limit: TELEGRAM_WEBHOOK.MAX_REQUESTS,
+  keyGenerator: clientIpRateLimitKey,
   message: { error: 'Too many Telegram webhook requests' },
   standardHeaders: true,
   legacyHeaders: false,
@@ -197,22 +208,30 @@ app.use(express.urlencoded({ extended: false }));
 // Rate limiting for API endpoints
 const apiLimiter = rateLimit({
   windowMs: API_RATE_LIMIT.WINDOW_MS,
-  max: API_RATE_LIMIT.MAX_REQUESTS,
+  limit: API_RATE_LIMIT.MAX_REQUESTS,
+  keyGenerator: accessUserRateLimitKey,
   message: { 
-    message: 'Слишком много запросов с этого IP, пожалуйста, попробуйте позже.' 
+    message: 'Слишком много запросов, пожалуйста, попробуйте позже.'
   },
   standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
   legacyHeaders: false, // Disable the `X-RateLimit-*` headers
   skip: (req) => {
-    // Skip rate limiting in development mode for easier testing
-    return process.env.NODE_ENV === 'development';
+    const path = req.originalUrl.split('?', 1)[0];
+    return process.env.NODE_ENV === 'development'
+      || req.method === 'OPTIONS'
+      || path === '/api/health'
+      || path.startsWith('/api/auth')
+      || path.startsWith('/api/upload')
+      || path.startsWith('/api/telegram-webhook');
   }
 });
 
-// Stricter rate limiting for authentication endpoints
+// Login is the only pre-auth flow that remains IP-based. Its budget allows at
+// least 100 students behind one campus NAT to sign in during the same window.
 const authLimiter = rateLimit({
-  windowMs: API_RATE_LIMIT.WINDOW_MS,
-  max: API_RATE_LIMIT.AUTH_MAX_REQUESTS,
+  windowMs: API_RATE_LIMIT.AUTH_WINDOW_MS,
+  limit: API_RATE_LIMIT.AUTH_MAX_REQUESTS,
+  keyGenerator: clientIpRateLimitKey,
   message: { 
     message: 'Слишком много попыток аутентификации, пожалуйста, попробуйте позже.' 
   },
@@ -223,9 +242,39 @@ const authLimiter = rateLimit({
   }
 });
 
+const refreshLimiter = rateLimit({
+  windowMs: API_RATE_LIMIT.REFRESH_WINDOW_MS,
+  limit: API_RATE_LIMIT.REFRESH_MAX_REQUESTS,
+  keyGenerator: refreshUserRateLimitKey,
+  message: { message: 'Слишком много запросов обновления сессии.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => process.env.NODE_ENV === 'development' || req.method === 'OPTIONS',
+});
+
+const uploadLimiter = rateLimit({
+  windowMs: API_RATE_LIMIT.UPLOAD_WINDOW_MS,
+  limit: API_RATE_LIMIT.UPLOAD_MAX_REQUESTS,
+  keyGenerator: accessUserRateLimitKey,
+  message: { message: 'Слишком много загрузок изображений.' },
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: (req) => process.env.NODE_ENV === 'development' || req.method === 'OPTIONS',
+});
+
 // Apply rate limiters
-app.use('/api/', apiLimiter);
-app.use('/api/auth', authLimiter);
+app.use('/api/auth/refresh', refreshLimiter);
+app.use('/api/auth/logout', refreshLimiter);
+app.use('/api/auth', (req, res, next) => {
+  if (req.path === '/' || req.path === '/dev') {
+    authLimiter(req, res, next);
+    return;
+  }
+
+  next();
+});
+app.use('/api/upload', uploadLimiter);
+app.use('/api', apiLimiter);
 
 app.use((req, res, next) => {
   const start = Date.now();

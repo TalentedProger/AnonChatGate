@@ -16,7 +16,7 @@ import fs from 'fs';
 import { fileURLToPath } from 'url';
 import { logger, logAuth, logError } from './logger';
 import * as statisticsController from './statistics';
-import { AUTH, MESSAGE, API_RATE_LIMIT, UPLOAD, SERVER } from './config';
+import { AUTH, UPLOAD } from './config';
 import { evaluateRoomAccess } from './room-access';
 import { InvalidImageError, storeSanitizedImage } from './image-upload';
 

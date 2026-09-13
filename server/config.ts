@@ -23,12 +23,18 @@ export const RATE_LIMIT = {
  * Rate limiting для API эндпоинтов
  */
 export const API_RATE_LIMIT = {
-  /** Размер окна в миллисекундах (15 минут) */
-  WINDOW_MS: 15 * 60 * 1000,
-  /** Максимум запросов за окно - общий */
-  MAX_REQUESTS: 100,
-  /** Максимум запросов за окно - аутентификация */
-  AUTH_MAX_REQUESTS: 20,
+  /** General API budget per authenticated user (5 minutes). */
+  WINDOW_MS: 5 * 60 * 1000,
+  MAX_REQUESTS: 600,
+  /** Login budget is IP-based and intentionally allows a 100-user campus NAT. */
+  AUTH_WINDOW_MS: 15 * 60 * 1000,
+  AUTH_MAX_REQUESTS: 300,
+  /** Refresh/logout requests are isolated by the signed refresh-token user ID. */
+  REFRESH_WINDOW_MS: 15 * 60 * 1000,
+  REFRESH_MAX_REQUESTS: 60,
+  /** Image decoding is CPU-intensive, so uploads have a separate user budget. */
+  UPLOAD_WINDOW_MS: 60 * 60 * 1000,
+  UPLOAD_MAX_REQUESTS: 30,
 } as const;
 
 export const TELEGRAM_WEBHOOK = {

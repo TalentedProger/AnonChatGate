@@ -394,7 +394,13 @@ Read-only проверка показала:
   - [x] Выдавать только UUID-имена `.webp` с `Content-Type: image/webp`, `X-Content-Type-Options: nosniff`, sandbox CSP и same-origin resource policy.
   - [x] Добавить unit-тесты валидного изображения, HTML, SVG и PNG+HTML polyglot; вредоносный хвост отсутствует после перекодирования.
   - [x] Проверить HTTP pipeline: polyglot → безопасный WebP (`200`), HTML → `400`, файл более 5 МБ → `413`, защитные заголовки присутствуют; тестовый файл удалён (14.09.2026).
-- [ ] Исправить rate limit/trust proxy, чтобы пилот не блокировался общим NAT.
+- [x] Исправить rate limit/trust proxy, чтобы пилот не блокировался общим NAT.
+  - [x] На Render доверять только ближайшему proxy hop, а client IP брать из перезаписываемого edge-заголовка `CF-Connecting-IP`; вне Render proxy-заголовок не доверять.
+  - [x] После входа формировать ключ лимита из `userId` проверенного access token; refresh/logout — из `userId` проверенного refresh token.
+  - [x] Разделить бюджеты general API, login, refresh/logout, upload и Telegram webhook; исключить health check и CORS preflight.
+  - [x] Unit-тестом подтвердить 100 независимых rate-limit keys для 100 пользователей с одним NAT IP, IPv6 subnet grouping и невозможность использовать access token как refresh identity.
+  - [x] Runtime-smoke на production bundle: у 100 пользователей с одним Render IP независимый остаток `599`; два анонимных запроса делят одну корзину `599 → 598` (14.09.2026).
+  - Ограничение пилота: используется in-memory store одного Node-процесса. До запуска нескольких инстансов подключить Redis/Render Key Value, иначе счётчики между процессами не синхронизируются.
 - [ ] Создать воспроизводимый baseline миграций и выровнять staging/production schema.
 - [ ] Не использовать текущий `WEBAPP_URL`; поднять новый staging после ротации секретов.
 
