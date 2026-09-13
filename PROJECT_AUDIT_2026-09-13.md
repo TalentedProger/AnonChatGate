@@ -376,13 +376,13 @@ Read-only проверка показала:
   - [x] Разрешить глобальную комнату только пользователю `approved` с завершённым профилем; остальные типы комнат закрывать до появления явной membership-модели.
   - [x] Применить ту же deny-by-default политику к WebSocket auth/join/send и ограничить broadcast текущей комнатой.
   - [x] Проверить HTTP-сценарии `401/403/400/404/200` и WebSocket auth deny/allow; добавить 6 unit-тестов политики (73/73 теста успешно, 14.09.2026).
-- [ ] Защитить Telegram webhook secret token.
+- [x] Защитить Telegram webhook secret token.
   - [x] Проверять `X-Telegram-Bot-Api-Secret-Token` до CORS и JSON body parser с безопасным сравнением digest.
   - [x] Передавать `secret_token` при регистрации webhook и завершать production startup ошибкой без корректного секрета.
   - [x] Добавить отдельный лимит только для уже аутентифицированных webhook requests и redaction заголовка в логах.
   - [x] Добавить 8 unit-тестов и HTTP smoke-test: отсутствующий/неверный секрет — `401`, корректный — `200`; неверный секрет отклоняется до разбора повреждённого JSON.
-  - [ ] Добавить новый `TELEGRAM_WEBHOOK_SECRET` в локальный `.env` и Render Environment.
-  - [ ] Опубликовать код, дождаться регистрации webhook с новым secret token и проверить production health/logs.
+  - [x] Добавить новый `TELEGRAM_WEBHOOK_SECRET` в локальный `.env` и Render Environment; значение отсутствует в Git history.
+  - [x] Опубликовать код и проверить production: неверный secret получает `401`, правильный — `200`, `/api/health` — `200` (14.09.2026).
 - [ ] Исправить IDOR friend request response.
 - [ ] Закрыть stored-XSS класс в upload pipeline; временно можно отключить upload до безопасной реализации.
 - [ ] Исправить rate limit/trust proxy, чтобы пилот не блокировался общим NAT.
