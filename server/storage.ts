@@ -59,7 +59,11 @@ export interface IStorage {
   getPendingRequestsForUser(userId: number): Promise<(FriendRequest & { fromUser: User })[]>;
   getFriendRequestByMonth(fromUserId: number, toUserId: number, monthKey: string): Promise<FriendRequest | undefined>;
   createFriendRequest(request: InsertFriendRequest): Promise<FriendRequest>;
-  updateFriendRequestStatus(requestId: number, status: 'accepted' | 'rejected'): Promise<FriendRequest | undefined>;
+  respondToFriendRequest(
+    requestId: number,
+    recipientUserId: number,
+    status: 'accepted' | 'rejected',
+  ): Promise<FriendRequest | undefined>;
   getAcceptedRequestsForUser(userId: number): Promise<(FriendRequest & { fromUser: User })[]>;
 }
 
@@ -416,14 +420,22 @@ export class DatabaseStorage implements IStorage {
     return friendRequest;
   }
 
-  async updateFriendRequestStatus(requestId: number, status: 'accepted' | 'rejected'): Promise<FriendRequest | undefined> {
+  async respondToFriendRequest(
+    requestId: number,
+    recipientUserId: number,
+    status: 'accepted' | 'rejected',
+  ): Promise<FriendRequest | undefined> {
     const [request] = await db
       .update(friendRequests)
       .set({ 
         status, 
         respondedAt: new Date() 
       })
-      .where(eq(friendRequests.id, requestId))
+      .where(and(
+        eq(friendRequests.id, requestId),
+        eq(friendRequests.toUserId, recipientUserId),
+        eq(friendRequests.status, 'pending'),
+      ))
       .returning();
     return request || undefined;
   }

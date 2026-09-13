@@ -1213,22 +1213,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post('/api/notifications/:requestId/respond', requireAuth, async (req: any, res) => {
     try {
       const userId = req.user.userId;
-      const requestId = parseInt(req.params.requestId, 10);
+      const rawRequestId = req.params.requestId;
       const { action } = req.body; // 'accept' or 'reject'
       
-      if (isNaN(requestId)) {
+      if (typeof rawRequestId !== 'string' || !/^[1-9]\d*$/.test(rawRequestId)) {
         return res.status(400).json({ error: 'Invalid request ID' });
       }
+
+      const requestId = Number(rawRequestId);
       
       if (!action || !['accept', 'reject'].includes(action)) {
         return res.status(400).json({ error: 'Invalid action. Use "accept" or "reject"' });
       }
       
       const status = action === 'accept' ? 'accepted' : 'rejected';
-      const updatedRequest = await storage.updateFriendRequestStatus(requestId, status);
+      const updatedRequest = await storage.respondToFriendRequest(requestId, userId, status);
       
       if (!updatedRequest) {
-        return res.status(404).json({ error: 'Request not found' });
+        return res.status(404).json({ error: 'Pending request not found' });
       }
       
       res.json({
